@@ -1,84 +1,155 @@
-// Initialize the Leaflet Map centered over default coordinates
-const map = L.map('map').setView([28.024, -81.794], 8);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ Lightning Strike Tracker</title>
+    <!-- Leaflet Mapping Stylesheet Component -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #0d1117;
+            color: #c9d1d9;
+        }
+        h1 { color: #f0f6fc; margin-bottom: 5px; }
+        .controls {
+            margin-bottom: 15px;
+            background: #161b22;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+        }
+        input, button {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-right: 10px;
+        }
+        button {
+            background: #238636;
+            color: #ffffff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover { background: #2ea043; }
+        #map {
+            height: 600px;
+            width: 100%;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+        }
+        .status { margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
 
-// Load a dark theme tile layer to simulate night sky/storm tracking environment
-L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
-}).addTo(map);
+    <h1>⚡ Real-Time Lightning Strike Tracker</h1>
+    <p>Visualize weather alerts and convective tracking distributions globally using interactive mapping interfaces.</p>
 
-// Layer group to hold the active lightning markers
-let lightningLayer = L.layerGroup().addTo(map);
-
-async function fetchLightningData() {
-    const key = document.getElementById('apiKey').value.trim();
-    const lat = document.getElementById('lat').value;
-    const lon = document.getElementById('lon').value;
-    const status = document.getElementById('statusMsg');
-
-    if (!key) {
-        status.innerText = "⚠️ Missing API Key!";
-        status.style.color = "#f85149";
-        return;
-    }
-
-    status.innerText = "Scanning skies for lightning activity...";
-    status.style.color = "#58a6ff";
-    lightningLayer.clearLayers();
-
-    // Use current unix timestamps for OpenWeather severe weather queries
-    const end = Math.floor(Date.now() / 1000);
-    const start = end - (3600 * 2); // Pull past 2 hours of records
-
-    // Correct OpenWeather API structure for localized weather/severe alerts data
-    const url = `https://openweathermap.org{lat}&lon=${lon}&appid=${key}`;
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+    <div class="controls">
+        <label>API Key: </label>
+        <input type="password" id="apiKey" placeholder="Paste OpenWeather API Key" value="">
         
-        const data = await response.json();
+        <label>Lat: </label>
+        <input type="number" id="lat" value="28.024" step="0.001" style="width: 80px;">
         
-        // Parse the alerts array looking specifically for convective/lightning events
-        if (data && data.alerts && data.alerts.length > 0) {
-            let strikeCount = 0;
+        <label>Lon: </label>
+        <input type="number" id="lon" value="-81.794" step="0.001" style="width: 80px;">
+        
+        <button onclick="fetchLightningData()">Scan Area</button>
+        <div class="status" id="statusMsg">Ready to scan. Paste your API key to begin.</div>
+    </div>
 
-            data.alerts.forEach(alert => {
-                // OpenWeather returns localized weather alerts; we extract coordinates if available
-                if(alert.event.toLowerCase().includes('thunderstorm') || alert.event.toLowerCase().includes('lightning')) {
-                    strikeCount++;
-                    
-                    // Fallback to searching area center if precise stroke coordinates aren't arrayed
-                    const markerLat = alert.lat || lat;
-                    const markerLon = alert.lon || lon;
+    <div id="map"></div>
 
-                    const marker = L.circleMarker([markerLat, markerLon], {
-                        radius: 12,
-                        fillColor: '#ffea00',
-                        color: '#ff9100',
-                        weight: 2,
-                        opacity: 1,
-                        fillOpacity: 0.8
+    <!-- Leaflet Engine JS Component -->
+    <script src="https://unpkg.com"></script>
+    <script>
+        // Initialize the Leaflet Map centered over default coordinates
+        const map = L.map('map').setView([28.024, -81.794], 8);
+
+        // Load a dark theme tile layer to simulate night sky/storm tracking environment
+        L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        }).addTo(map);
+
+        // Layer group to hold the active markers
+        let lightningLayer = L.layerGroup().addTo(map);
+
+        async function fetchLightningData() {
+            const key = document.getElementById('apiKey').value.trim();
+            const lat = document.getElementById('lat').value;
+            const lon = document.getElementById('lon').value;
+            const status = document.getElementById('statusMsg');
+
+            if (!key) {
+                status.innerText = "⚠️ Please paste your API Key into the input field box!";
+                status.style.color = "#f85149";
+                return;
+            }
+
+            status.innerText = "Scanning skies for lightning and severe convective activity...";
+            status.style.color = "#58a6ff";
+            lightningLayer.clearLayers();
+
+            // Correct OpenWeather structural endpoint URL for active weather/severe alerts data
+            const url = `https://openweathermap.org{lat}&lon=${lon}&appid=${key}`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                
+                const data = await response.json();
+                
+                // Parse the alerts array looking specifically for convective systems
+                if (data && data.alerts && data.alerts.length > 0) {
+                    let strikeCount = 0;
+
+                    data.alerts.forEach(alert => {
+                        const eventText = alert.event.toLowerCase();
+                        if(eventText.includes('thunderstorm') || eventText.includes('lightning') || eventText.includes('severe')) {
+                            strikeCount++;
+                            
+                            // Map over current coordinates if explicit bounds details aren't nested
+                            const markerLat = alert.lat || lat;
+                            const markerLon = alert.lon || lon;
+
+                            const marker = L.circleMarker([markerLat, markerLon], {
+                                radius: 14,
+                                fillColor: '#ffea00',
+                                color: '#ff9100',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.8
+                            });
+                            
+                            marker.bindPopup(`<b>${alert.event}</b><br>${alert.description}`);
+                            lightningLayer.addLayer(marker);
+                        }
                     });
                     
-                    marker.bindPopup(`<b>${alert.event}</b><br>${alert.description}`);
-                    lightningLayer.addLayer(marker);
+                    if (strikeCount > 0) {
+                        status.innerText = `Success! Plotted active severe convective tracking elements.`;
+                        status.style.color = "#3fb950";
+                    } else {
+                        status.innerText = "No active severe thunderstorm alerts match current coordinates.";
+                        status.style.color = "#e3b341";
+                    }
+                } else {
+                    status.innerText = "No active weather alerts reported in this region.";
+                    status.style.color = "#e3b341";
                 }
-            });
-            
-            if (strikeCount > 0) {
-                status.innerText = `Success! Plotted active storm systems in your zone.`;
-                status.style.color = "#3fb950";
-            } else {
-                status.innerText = "No severe lightning parameters matched in current active alerts.";
-                status.style.color = "#e3b341";
+            } catch (error) {
+                console.error(error);
+                status.innerText = "Error pulling data. Verify subscription tier permissions or API Key validity.";
+                status.style.color = "#f85149";
             }
-        } else {
-            status.innerText = "No active storm alerts detected in this range.";
-            status.style.color = "#e3b341";
         }
-    } catch (error) {
-        console.error(error);
-        status.innerText = "Error pulling data. Verify subscription tier permissions or API Key.";
-        status.style.color = "#f85149";
-    }
-}
+    </script>
+</body>
+</html>
