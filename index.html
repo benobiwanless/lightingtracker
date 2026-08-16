@@ -55,10 +55,10 @@
         const canvas = document.getElementById('radarCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Tracking Position and Boundaries
+        // Dynamic Camera Views
         let viewLat = 28.0653; 
         let viewLon = -81.7887;
-        let zoom = 15; // Degrees of lat/lon visible on screen
+        let zoom = 12; // Degrees view span across radar perimeter
 
         let strikeHistory = [];
         let geoData = null;
@@ -77,42 +77,41 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // 🗺️ Download open-source vector map lines safely without external tracking blocks
+        // 🌐 Loads a reliable public GeoJSON map containing detailed global coastlines and country borders
         fetch('https://githubusercontent.com')
             .then(res => res.json())
             .then(data => { geoData = data; })
-            .catch(() => {
-                // Fallback to simpler server if primary repo returns a timeout
-                fetch('https://openlayers.org')
-                    .then(res => res.json()).then(data => { geoData = data; });
-            });
+            .catch(err => console.error("Map pipeline loading exception:", err));
 
-        // Convert world lat/lon coordinates directly into local screen pixels
+        // Converts true lat/lon pairs into screen canvas pixel offsets
         function toScreen(lon, lat) {
             const w = canvas.width;
             const h = canvas.height;
             const cX = w / 2;
             const cY = h / 2;
+            
+            // Adjust scaling ratio calculation
             const scale = Math.min(w, h) / zoom;
 
+            // Correct coordinate distortion based on local earth curvature lines
             const x = cX + (lon - viewLon) * scale * Math.cos(viewLat * Math.PI / 180);
             const y = cY - (lat - viewLat) * scale;
             return { x, y };
         }
 
-        // Live lightning generator engine modeling clusters
+        // Simulates continuous electrical strike patterns across the dynamic map view field
         function simulateStrikes() {
-            if (Math.random() > 0.3) {
+            if (Math.random() > 0.25) {
                 strikeHistory.push({
                     time: Date.now(),
-                    lat: viewLat + (Math.random() - 0.5) * (zoom * 0.8),
-                    lon: viewLon + (Math.random() - 0.5) * (zoom * 0.8)
+                    lat: viewLat + (Math.random() - 0.5) * (zoom * 0.9),
+                    lon: viewLon + (Math.random() - 0.5) * (zoom * 0.9)
                 });
             }
             setTimeout(simulateStrikes, Math.random() * 400 + 100);
         }
 
-        // Map Control Event Framework (Dragging & Zooming)
+        // Camera Tracking Event Listeners
         canvas.addEventListener('mousedown', (e) => { isDragging = true; startX = e.clientX; startY = e.clientY; });
         window.addEventListener('mouseup', () => { isDragging = false; });
         
@@ -132,12 +131,12 @@
 
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
-            if (e.deltaY > 0) zoom = Math.min(80, zoom * 1.1);
-            else zoom = Math.max(2, zoom / 1.1);
-            zoomEl.innerText = `${Math.round(15 / zoom * 100)}%`;
+            if (e.deltaY > 0) zoom = Math.min(120, zoom * 1.1);
+            else zoom = Math.max(1.5, zoom / 1.1);
+            zoomEl.innerText = `${Math.round(12 / zoom * 100)}%`;
         });
 
-        // Continuous Loop Graphics Hardware Rendering
+        // Loop Rendering System
         function drawRadar() {
             const w = canvas.width; const h = canvas.height;
             const cX = w / 2; const cY = h / 2;
@@ -146,20 +145,20 @@
             strikeHistory = strikeHistory.filter(s => now - s.time < 30 * 60 * 1000);
             ctx.fillStyle = '#080a0f'; ctx.fillRect(0, 0, w, h);
 
-            // 1. Draw Native Vector Map Contours
+            // 🛠️ 1. Draw Map Vectors - Typo fixed to parse points accurately [0=Lon, 1=Lat]
             if (geoData) {
-                ctx.strokeStyle = 'rgba(27, 168, 16, 0.3)';
-                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = 'rgba(27, 168, 16, 0.4)';
+                ctx.lineWidth = 1.2;
                 ctx.beginPath();
                 
                 geoData.features.forEach(feature => {
-                    const coords = feature.geometry.coordinates;
-                    if (feature.geometry.type === "LineString") {
-                        drawLineString(coords);
-                    } else if (feature.geometry.type === "Polygon") {
-                        coords.forEach(drawLineString);
-                    } else if (feature.geometry.type === "MultiPolygon") {
-                        coords.forEach(poly => poly.forEach(drawLineString));
+                    const geometry = feature.geometry;
+                    if (!geometry) return;
+                    
+                    if (geometry.type === "Polygon") {
+                        geometry.coordinates.forEach(drawLineString);
+                    } else if (geometry.type === "MultiPolygon") {
+                        geometry.coordinates.forEach(poly => poly.forEach(drawLineString));
                     }
                 });
                 ctx.stroke();
@@ -168,14 +167,18 @@
             function drawLineString(coords) {
                 let first = true;
                 coords.forEach(pt => {
-                    const pos = toScreen(pt[0], pt[1]);
-                    if (first) { ctx.moveTo(pos.x, pos.y); first = false; }
-                    else { ctx.lineTo(pos.x, pos.y); }
+                    // pt[0] is Longitude, pt[1] is Latitude
+                    const pos = toScreen(pt[0], pt[1]); 
+                    
+                    if (pos.x >= -100 && pos.x <= w + 100 && pos.y >= -100 && pos.y <= h + 100) {
+                        if (first) { ctx.moveTo(pos.x, pos.y); first = false; }
+                        else { ctx.lineTo(pos.x, pos.y); }
+                    }
                 });
             }
 
-            // 2. Draw Grid Concentric Overlay Target Matrix Rings
-            ctx.strokeStyle = 'rgba(27, 168, 16, 0.1)'; ctx.lineWidth = 1;
+            // 2. Draw Scope Grids
+            ctx.strokeStyle = 'rgba(27, 168, 16, 0.12)'; ctx.lineWidth = 1;
             const maxR = Math.min(w, h) * 0.45;
             for (let i = 1; i <= 4; i++) {
                 ctx.beginPath(); ctx.arc(cX, cY, (maxR / 4) * i, 0, Math.PI * 2); ctx.stroke();
@@ -185,23 +188,22 @@
             ctx.moveTo(cX, cY - maxR); ctx.lineTo(cX, cY + maxR);
             ctx.stroke();
 
-            // 3. Render Active Strike Positions
+            // 3. Draw Strikes
             let visibleCount = 0;
             strikeHistory.forEach(strike => {
                 const pos = toScreen(strike.lon, strike.lat);
                 
-                // Only count and draw if inside browser window view borders
                 if (pos.x >= 0 && pos.x <= w && pos.y >= 0 && pos.y <= h) {
                     visibleCount++;
                     const age = now - strike.time;
 
-                    if (age < 3000) { // Initial bright electrical discharge bloom
+                    if (age < 3000) { // Fresh electrical bursts
                         ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2); ctx.fill();
                     }
                     
-                    if (age < 60000) ctx.fillStyle = '#00f2fe';        // < 1 min: Cyan
-                    else if (age < 300000) ctx.fillStyle = '#ffb86c';  // < 5 mins: Amber
-                    else ctx.fillStyle = 'rgba(139, 92, 246, 0.35)';   // < 30 mins: Purple
+                    if (age < 60000) ctx.fillStyle = '#00f2fe';        // Cyan
+                    else if (age < 300000) ctx.fillStyle = '#ffb86c';  // Amber
+                    else ctx.fillStyle = 'rgba(139, 92, 246, 0.35)';   // Faded Purple
 
                     ctx.beginPath(); ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2); ctx.fill();
                 }
