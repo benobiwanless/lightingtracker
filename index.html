@@ -679,11 +679,11 @@
   var liveConfig = null;
   var livePollHandle = null;
 
-  // Baked-in default so the site is live the instant it loads, no setup required.
-  // Anyone viewing this page's source can see this key — swap it out or move to
-  // your own key if you don't want it public.
+  // No key baked in — paste your own in the settings panel to go live.
+  // Location/radius default to Lakeland, FL so it's ready to go the moment
+  // you add a key.
   var DEFAULT_CONFIG = {
-    key: '8c8ea33a88124ab0744dda93235f1230',
+    key: '',
     lat: 28.0395,
     lon: -81.9498,
     radius: 50
@@ -847,7 +847,7 @@
   });
 
   // restore saved config if a visitor previously connected their own key,
-  // otherwise fall back to the baked-in default so the site is live immediately
+  // otherwise fall back to the (keyless) default location/radius
   var startConfig = DEFAULT_CONFIG;
   try{
     var saved = JSON.parse(localStorage.getItem('strikewatch_cfg') || 'null');
@@ -870,7 +870,11 @@
     }
   });
 
-  startLive(startConfig);
+  if (startConfig.key){
+    startLive(startConfig);
+  } else {
+    document.getElementById('live-status').textContent = 'Add your OpenWeather API key above, then hit "Connect & watch" to go live.';
+  }
 })();
 </script>
 </body>
