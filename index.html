@@ -3,298 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Live Lightning Radar</title>
-    <!-- 🗺️ Core Leaflet Map Engine Assets -->
-    <link rel="stylesheet" href="https://unpkg.com" crossorigin="" />
-    <script src="https://unpkg.com" crossorigin=""></script>
+    <title>Live Lightning Map - Fullscreen Radar</title>
     <style>
-        * {
-            box-sizing: border-box;
-        }
-        
+        /* 📱 Force the document to take up exactly 100% of the screen */
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #0c0f12;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
+            background-color: #0a0c10;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
 
-        /* 🗺️ Fixed Full Screen Map Layer Canvas Layout */
-        #map {
+        /* 🗺️ Makes the lightning grid iframe fill the total browser window */
+        .map-frame {
             width: 100%;
             height: 100%;
+            border: none;
             position: absolute;
             top: 0;
             left: 0;
-            background-color: #0c0f12;
             z-index: 1;
         }
 
-        /* 📊 Floating Glass Dashboard Overlay Control Center */
-        .hud-overlay {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 1000; /* Keeps stats sitting safely on top of map imagery */
-            background: rgba(22, 26, 34, 0.92);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 14px;
-            padding: 18px 24px;
-            min-width: 280px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            pointer-events: auto;
-        }
-
-        .hud-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        h1 {
-            color: #f0f4f8;
-            font-size: 1.2rem;
-            margin: 0;
-            font-weight: 700;
-        }
-
+        /* 📡 Small clean status overlay badge resting on top of the map */
         .status-badge {
-            font-size: 0.75rem;
-            background: rgba(255, 184, 108, 0.15);
-            color: #ffb86c;
-            padding: 4px 10px;
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 10;
+            background: rgba(15, 18, 24, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            padding: 8px 14px;
             border-radius: 20px;
+            font-size: 0.8rem;
             font-weight: 600;
+            letter-spacing: 0.02em;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            pointer-events: none; /* Keeps the map draggable underneath the badge */
         }
 
-        .status-badge.connected {
-            background: rgba(80, 250, 123, 0.15);
-            color: #50fa7b;
-        }
-
-        .status-dot {
+        .pulse-dot {
             width: 8px;
             height: 8px;
+            background-color: #00f2fe;
             border-radius: 50%;
-            background: currentColor;
-            box-shadow: 0 0 8px currentColor;
+            box-shadow: 0 0 10px #00f2fe, 0 0 20px #00f2fe;
+            animation: pulse 2s infinite;
         }
 
-        .metric-container {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .metric-label {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: #6272a4;
-        }
-
-        .metric-value {
-            font-size: 2rem;
-            font-weight: 800;
-            color: #00f2fe;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .hud-footer {
-            margin-top: 10px;
-            font-size: 0.7rem;
-            font-family: monospace;
-            color: #6272a4;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.6; }
         }
     </style>
 </head>
 <body>
 
-    <!-- Floating HUD Tracker Panel Overlay -->
-    <div class="hud-overlay">
-        <div class="hud-header">
-            <h1>⚡ Global Tracker</h1>
-            <div id="status-badge" class="status-badge">
-                <span class="status-dot"></span>
-                <span id="status-text">Connecting</span>
-            </div>
-        </div>
-        <div class="metric-container">
-            <div class="metric-label">Strikes on Screen (30m)</div>
-            <div id="visible-count" class="metric-value">0</div>
-        </div>
-        <div id="hud-log" class="hud-footer">Initializing system mapping...</div>
+    <!-- Small Floating Dashboard Accent Info -->
+    <div class="status-badge">
+        <div class="pulse-dot"></div>
+        <span>LIVE GLOBAL FEED</span>
     </div>
 
-    <!-- Active Map Surface Container -->
-    <div id="map"></div>
+    <!-- 🌐 The Official Real-Time Map System Framework -->
+    <iframe 
+        class="map-frame" 
+        src="https://blitzortung.org" 
+        allow="geolocation"
+        loading="lazy">
+    </iframe>
 
-    <script>
-        // Start view map directly centered over Florida with canvas rendering enabled
-        const map = L.map('map', {
-            zoomControl: false,
-            preferCanvas: true
-        }).setView([28.0653, -81.7887], 7);
-
-        // Position control keys on the safe bottom-right corner out of HUD dashboard overlap
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-        // 🔄 NEW: Swapped out broken CARTO tiles for high-reliability OpenStreetMap Dark Neutral Stylesheets
-        L.tileLayer('https://{s}.tile.jawg.io/jawg-dark/{z}/{x}/{y}{r}.png?access-token=guest', {
-            attribution: '&copy; OpenStreetMap contributors &copy; JawgMaps',
-            subdomains: 'abcd',
-            maxZoom: 19
-        }).addTo(map);
-
-        let globalStrikes = [];
-        let socket;
-
-        const wsServers = [
-            "wss://ws1.blitzortung.org:3000",
-            "wss://ws3.blitzortung.org:3000",
-            "wss://ws5.blitzortung.org:3000",
-            "wss://ws7.blitzortung.org:3000"
-        ];
-
-        const visibleCountEl = document.getElementById('visible-count');
-        const statusBadge = document.getElementById('status-badge');
-        const statusText = document.getElementById('status-text');
-        const logEl = document.getElementById('hud-log');
-
-        function decodeBlitzData(b) {
-            var a, e = {}, d = b.split(""), c = d, f = c, g = [c], h = 256;
-            let o = h; 
-            for (b = 1; b < d.length; b++) {
-                a = d[b].charCodeAt(0);
-                a = h > a ? d[b] : e[a] ? e[a] : f + c;
-                g.push(a);
-                c = a.charAt(0);
-                e[o] = f + c;
-                o++;
-                f = a;
-            }
-            return g.join("");
-        }
-
-        function connectStreamPipeline() {
-            const endpoint = wsServers[Math.floor(Math.random() * wsServers.length)];
-            socket = new WebSocket(endpoint);
-
-            socket.onopen = () => {
-                statusBadge.classList.add('connected');
-                statusText.innerText = "Live";
-                logEl.innerText = "Listening for global storm arrays...";
-                socket.send(JSON.stringify({ "a": 1 }));
-            };
-
-            socket.onmessage = (event) => {
-                try {
-                    let raw = event.data;
-                    if (typeof raw === "string" && !raw.startsWith("{")) {
-                        raw = decodeBlitzData(raw);
-                    }
-                    const packet = JSON.parse(raw);
-                    
-                    const lat = packet.lat || (Array.isArray(packet) ? packet : null);
-                    const lon = packet.lon || (Array.isArray(packet) ? packet : null);
-
-                    if (lat && lon) {
-                        processIncomingGlobalStrike(lat, lon);
-                    }
-                } catch(e) {}
-            };
-
-            socket.onclose = () => {
-                statusBadge.classList.remove('connected');
-                statusText.innerText = "Connecting";
-                logEl.innerText = "Re-indexing socket relays...";
-                setTimeout(connectStreamPipeline, 4000);
-            };
-        }
-
-        function processIncomingGlobalStrike(lat, lon) {
-            const time = Date.now();
-            
-            const marker = L.circleMarker([lat, lon], {
-                radius: 5,
-                fillColor: '#00f2fe',
-                color: '#fff',
-                weight: 1,
-                fillOpacity: 1.0,
-                opacity: 1.0
-            });
-
-            globalStrikes.push({ time, lat, lon, marker });
-
-            const mapBounds = map.getBounds();
-            if (mapBounds.contains([lat, lon])) {
-                marker.addTo(map);
-                
-                setTimeout(() => {
-                    marker.setStyle({ radius: 4, color: 'transparent' });
-                }, 300);
-            }
-        }
-
-        function updateMapBoundsCounters() {
-            const now = Date.now();
-            const currentBounds = map.getBounds();
-            let visibleCount = 0;
-
-            for (let i = globalStrikes.length - 1; i >= 0; i--) {
-                const strike = globalStrikes[i];
-                const age = now - strike.time;
-
-                if (age > 30 * 60 * 1000) {
-                    if (map.hasLayer(strike.marker)) {
-                        map.removeLayer(strike.marker);
-                    }
-                    globalStrikes.splice(i, 1);
-                    continue;
-                }
-
-                if (age < 60000) {
-                    strike.marker.setStyle({ fillColor: '#00f2fe' });
-                } else if (age < 300000) {
-                    strike.marker.setStyle({ fillColor: '#ffb86c' });
-                } else {
-                    strike.marker.setStyle({ fillColor: '#8b5cf6' });
-                }
-
-                const calculatedOpacity = Math.max(0.15, 1.0 - (age / (30 * 60 * 1000)));
-                strike.marker.setStyle({ fillOpacity: calculatedOpacity });
-
-                if (currentBounds.contains([strike.lat, strike.lon])) {
-                    visibleCount++;
-                    if (!map.hasLayer(strike.marker)) {
-                        strike.marker.addTo(map);
-                    }
-                } else {
-                    if (map.hasLayer(strike.marker)) {
-                        map.removeLayer(strike.marker);
-                    }
-                }
-            }
-
-            visibleCountEl.innerText = visibleCount;
-        }
-
-        // Attach listeners to update layout whenever you drag or zoom across the world
-        map.on('moveend zoomend', updateMapBoundsCounters);
-        setInterval(updateMapBoundsCounters, 1000);
-        connectStreamPipeline();
-    </script>
 </body>
 </html>
