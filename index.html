@@ -414,6 +414,7 @@
     </div>
     <button class="btn-locate" id="btn-locate">Use my current location</button>
     <button class="btn-primary" id="btn-connect">Connect &amp; watch</button>
+    <button class="btn-locate" id="btn-forget">Forget saved key</button>
     <div class="settings-status" id="live-status">Not connected — showing demo feed until you connect.</div>
   </div>
 </div>
@@ -844,6 +845,16 @@
       localStorage.setItem('strikewatch_cfg', JSON.stringify({key:key, lat:lat, lon:lon, radius:radius}));
     }catch(e){}
     startLive({ key:key, lat:lat, lon:lon, radius:radius });
+  });
+
+  document.getElementById('btn-forget').addEventListener('click', function(){
+    try{ localStorage.removeItem('strikewatch_cfg'); }catch(e){}
+    document.getElementById('input-key').value = '';
+    document.getElementById('input-lat').value = DEFAULT_CONFIG.lat;
+    document.getElementById('input-lon').value = DEFAULT_CONFIG.lon;
+    document.getElementById('input-radius').value = DEFAULT_CONFIG.radius;
+    stopLive();
+    document.getElementById('live-status').textContent = 'Saved key cleared from this browser. Add a key above to go live again.';
   });
 
   // restore saved config if a visitor previously connected their own key,
