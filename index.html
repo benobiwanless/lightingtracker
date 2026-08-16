@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Global Live Lightning Radar</title>
-    <!-- 🗺️ Core Map Stylesheet -->
+    <!-- 🗺️ Core Leaflet Map Engine Assets -->
     <link rel="stylesheet" href="https://unpkg.com" crossorigin="" />
-    <!-- 📦 Core Map Engine Script -->
     <script src="https://unpkg.com" crossorigin=""></script>
     <style>
         * {
@@ -23,7 +22,7 @@
             overflow: hidden;
         }
 
-        /* Full Screen Map Canvas Layout */
+        /* 🗺️ Fixed Full Screen Map Layer Canvas Layout */
         #map {
             width: 100%;
             height: 100%;
@@ -34,13 +33,13 @@
             z-index: 1;
         }
 
-        /* 📊 Floating Glass Dashboard Overlay */
+        /* 📊 Floating Glass Dashboard Overlay Control Center */
         .hud-overlay {
             position: absolute;
             top: 20px;
             left: 20px;
-            z-index: 1000;
-            background: rgba(22, 26, 34, 0.9);
+            z-index: 1000; /* Keeps stats sitting safely on top of map imagery */
+            background: rgba(22, 26, 34, 0.92);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -119,15 +118,11 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-
-        .leaflet-interactive {
-            transition: opacity 0.5s ease-out;
-        }
     </style>
 </head>
 <body>
 
-    <!-- Floating HUD Display Overlay -->
+    <!-- Floating HUD Tracker Panel Overlay -->
     <div class="hud-overlay">
         <div class="hud-header">
             <h1>⚡ Global Tracker</h1>
@@ -143,22 +138,22 @@
         <div id="hud-log" class="hud-footer">Initializing system mapping...</div>
     </div>
 
-    <!-- Interactive Fullscreen Map Surface Container -->
+    <!-- Active Map Surface Container -->
     <div id="map"></div>
 
     <script>
-        // Start map view centered over Florida
+        // Start view map directly centered over Florida with canvas rendering enabled
         const map = L.map('map', {
             zoomControl: false,
-            preferCanvas: true // Use rapid canvas performance for drawing strikes
+            preferCanvas: true
         }).setView([28.0653, -81.7887], 7);
 
-        // Reposition zoom handles smoothly to the bottom right side out of your dashboard panel's way
+        // Position control keys on the safe bottom-right corner out of HUD dashboard overlap
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        // Apply dark vector mapping imagery layout style
-        L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO',
+        // 🔄 NEW: Swapped out broken CARTO tiles for high-reliability OpenStreetMap Dark Neutral Stylesheets
+        L.tileLayer('https://{s}.tile.jawg.io/jawg-dark/{z}/{x}/{y}{r}.png?access-token=guest', {
+            attribution: '&copy; OpenStreetMap contributors &copy; JawgMaps',
             subdomains: 'abcd',
             maxZoom: 19
         }).addTo(map);
@@ -233,7 +228,7 @@
             const time = Date.now();
             
             const marker = L.circleMarker([lat, lon], {
-                radius: 6,
+                radius: 5,
                 fillColor: '#00f2fe',
                 color: '#fff',
                 weight: 1,
@@ -296,6 +291,7 @@
             visibleCountEl.innerText = visibleCount;
         }
 
+        // Attach listeners to update layout whenever you drag or zoom across the world
         map.on('moveend zoomend', updateMapBoundsCounters);
         setInterval(updateMapBoundsCounters, 1000);
         connectStreamPipeline();
