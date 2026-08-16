@@ -3,58 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Lightning Tracker - Auburndale FL</title>
+    <title>Global Live Lightning Radar</title>
+    <!-- Leaflet.js Interactive Mapping Assets -->
+    <link rel="stylesheet" href="https://unpkg.com" />
     <style>
-        :root {
-            --bg-color: #0d0f12;
-            --card-bg: #161a22;
-            --accent-glow: rgba(0, 242, 254, 0.15);
-            --text-main: #f0f4f8;
-            --text-muted: #6272a4;
-            --lightning-color: #00f2fe;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .dashboard {
-            width: 100%;
-            max-width: 600px;
-            background: var(--card-bg);
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
-            padding: 24px;
+        * {
             box-sizing: border-box;
         }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0c0f12;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+        }
 
-        header {
+        /* 🗺️ Full Screen Map Layout */
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* 📊 Floating Glass Dashboard Overlay */
+        .hud-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000; /* Keeps metrics on top of map tiles */
+            background: rgba(22, 26, 34, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 18px 24px;
+            min-width: 280px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            pointer-events: auto;
+        }
+
+        .hud-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding-bottom: 16px;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
 
         h1 {
-            font-size: 1.4rem;
+            color: #f0f4f8;
+            font-size: 1.2rem;
             margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            font-weight: 700;
         }
 
         .status-badge {
-            font-size: 0.8rem;
-            background: rgba(255, 184, 108, 0.1);
+            font-size: 0.75rem;
+            background: rgba(255, 184, 108, 0.15);
             color: #ffb86c;
             padding: 4px 10px;
             border-radius: 20px;
@@ -65,7 +72,7 @@
         }
 
         .status-badge.connected {
-            background: rgba(80, 250, 123, 0.1);
+            background: rgba(80, 250, 123, 0.15);
             color: #50fa7b;
         }
 
@@ -77,124 +84,85 @@
             box-shadow: 0 0 8px currentColor;
         }
 
-        .coordinates {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-bottom: 20px;
+        .metric-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
         }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .stat-card {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
+        .metric-label {
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: var(--text-muted);
-            margin-bottom: 6px;
+            color: #6272a4;
         }
 
-        .stat-value {
-            font-size: 1.8rem;
-            font-weight: 700;
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #00f2fe;
             font-variant-numeric: tabular-nums;
         }
 
-        /* 📡 Radar Canvas Map Style */
-        .map-container {
-            position: relative;
-            width: 100%;
-            aspect-ratio: 1;
-            background: radial-gradient(circle, #1a2333 0%, #0d131f 100%);
-            border-radius: 12px;
-            border: 1px solid rgba(0, 242, 254, 0.2);
-            overflow: hidden;
-            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
-        }
-
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-
-        .network-log {
-            margin-top: 16px;
+        .hud-footer {
+            margin-top: 10px;
+            font-size: 0.7rem;
             font-family: monospace;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-align: center;
+            color: #6272a4;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        /* Smooth fading animation for flash markers */
+        .leaflet-interactive {
+            transition: opacity 0.5s ease-out;
         }
     </style>
 </head>
 <body>
 
-    <div class="dashboard">
-        <header>
-            <h1>⚡ Lightning Tracker</h1>
+    <!-- Floating HUD Display -->
+    <div class="hud-overlay">
+        <div class="hud-header">
+            <h1>⚡ Global Tracker</h1>
             <div id="status-badge" class="status-badge">
                 <span class="status-dot"></span>
-                <span id="status-text">Connecting...</span>
-            </div>
-        </header>
-
-        <div class="coordinates">📍 Auburndale, FL &bull; 28.0653° N, 81.7887° W</div>
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Strikes (30 Mins)</div>
-                <div id="strike-count" class="stat-value">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Closest Strike</div>
-                <div id="closest-strike" class="stat-value">--</div>
+                <span id="status-text">Connecting</span>
             </div>
         </div>
-
-        <div class="map-container">
-            <canvas id="radarCanvas"></canvas>
+        <div class="metric-container">
+            <div class="metric-label">Strikes on Screen (30m)</div>
+            <div id="visible-count" class="metric-value">0</div>
         </div>
-
-        <div id="network-log" class="network-log">Initializing data pipeline...</div>
+        <div id="hud-log" class="hud-footer">Initializing system mapping...</div>
     </div>
 
+    <!-- Map Canvas Element -->
+    <div id="map"></div>
+
+    <!-- Leaflet Script Dependancy -->
+    <script src="https://unpkg.com"></script>
     <script>
-        // 📍 Anchor Center Config (Auburndale, FL)
-        const HOME_LAT = 28.0653;
-        const HOME_LON = -81.7887;
-        const MAX_RADIUS_KM = 50; // Perimeter boundary width (50km window)
+        // Initialize map centered near Auburndale, FL but pulled back for visibility
+        const map = L.map('map', {
+            zoomControl: false // Hide default icons to maintain clean look
+        }).setView([28.0653, -81.7887], 7);
 
-        // UI Element Hooks
-        const countEl = document.getElementById('strike-count');
-        const closestEl = document.getElementById('closest-strike');
-        const statusBadge = document.getElementById('status-badge');
-        const statusText = document.getElementById('status-text');
-        const logEl = document.getElementById('network-log');
-        const canvas = document.getElementById('radarCanvas');
-        const ctx = canvas.getContext('2d');
+        // Position zoom controllers customly on bottom right corner out of HUD's way
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        // Dynamic State Arrays
-        let strikesArray = [];
+        // Inject dark, minimalist night-mode map skin tiles
+        L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // State Tracking Data structures
+        let globalStrikes = [];
         let socket;
 
-        // Blitzortung rotated proxy load balances
         const wsServers = [
             "wss://ws1.blitzortung.org:3000",
             "wss://ws3.blitzortung.org:3000",
@@ -202,37 +170,13 @@
             "wss://ws7.blitzortung.org:3000"
         ];
 
-        // Resize Radar to native high-density values
-        function resizeCanvas() {
-            const size = canvas.parentElement.clientWidth;
-            canvas.width = size * window.devicePixelRatio;
-            canvas.height = size * window.devicePixelRatio;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+        // UI Hooks
+        const visibleCountEl = document.getElementById('visible-count');
+        const statusBadge = document.getElementById('status-badge');
+        const statusText = document.getElementById('status-text');
+        const logEl = document.getElementById('hud-log');
 
-        // Earth Curve Trigonometry Calculation
-        function getDistanceAndAzimuth(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Earth KM radius
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            const distance = R * c;
-
-            // Compute structural bearing angle relative to center point
-            const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
-            const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
-                      Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
-            const azimuth = Math.atan2(y, x);
-
-            return { distance, azimuth };
-        }
-
-        // LZW Decoding routine built directly to unpack Blitz network arrays
+        // Standard string expansion engine used to unpack raw packets from blitz stream
         function decodeBlitzData(b) {
             var a, e = {}, d = b.split(""), c = d, f = c, g = [c], h = 256;
             let o = h; 
@@ -248,18 +192,16 @@
             return g.join("");
         }
 
-        // Network Socket Thread Manager
-        function openConnection() {
-            const server = wsServers[Math.floor(Math.random() * wsServers.length)];
-            logEl.innerText = `Connecting to routing path: ${server}`;
-            
-            socket = new WebSocket(server);
+        // Live Network Websocket Stream Driver
+        function connectStreamPipeline() {
+            const endpoint = wsServers[Math.floor(Math.random() * wsServers.length)];
+            socket = new WebSocket(endpoint);
 
             socket.onopen = () => {
                 statusBadge.classList.add('connected');
                 statusText.innerText = "Live";
-                logEl.innerText = "Pipeline steady. Listening for Floridian electrical activity...";
-                socket.send(JSON.stringify({ "a": 1 })); // Dynamic protocol verification handshake
+                logEl.innerText = "Listening for global storm arrays...";
+                socket.send(JSON.stringify({ "a": 1 }));
             };
 
             socket.onmessage = (event) => {
@@ -270,25 +212,81 @@
                     }
                     const packet = JSON.parse(raw);
                     
-                    // Parse normalized strike coordinates across variable JSON mutations
                     const lat = packet.lat || (Array.isArray(packet) ? packet[1] : null);
                     const lon = packet.lon || (Array.isArray(packet) ? packet[2] : null);
 
-                    if (!lat || !lon) return;
-
-                    const geo = getDistanceAndAzimuth(HOME_LAT, HOME_LON, lat, lon);
-
-                    if (geo.distance <= MAX_RADIUS_KM) {
-                        registerNewStrike(lat, lon, geo.distance, geo.azimuth);
+                    if (lat && lon) {
+                        processIncomingGlobalStrike(lat, lon);
                     }
                 } catch(e) {}
             };
 
             socket.onclose = () => {
                 statusBadge.classList.remove('connected');
-                statusText.innerText = "Reconnecting";
-                logEl.innerText = "Connection lost. Cycling downstream endpoints...";
-                setTimeout(openConnection, 4000);
+                statusText.innerText = "Reconnected";
+                logEl.innerText = "Re-indexing socket relays...";
+                setTimeout(connectStreamPipeline, 4000);
             };
         }
+
+        function processIncomingGlobalStrike(lat, lon) {
+            const time = Date.now();
+            
+            // Build visual marker parameters with bright color profile
+            const marker = L.circleMarker([lat, lon], {
+                radius: 6,
+                fillColor: '#00f2fe',
+                color: '#fff',
+                weight: 1,
+                fillOpacity: 1.0,
+                opacity: 1.0
+            });
+
+            // Store inside global master array list
+            globalStrikes.push({ time, lat, lon, marker });
+
+            // Evaluate if marker needs drawing immediately based on current screen frame bounds
+            const mapBounds = map.getBounds();
+            if (mapBounds.contains([lat, lon])) {
+                marker.addTo(map);
+                
+                // Fast execution burst effect ring
+                setTimeout(() => {
+                    marker.setStyle({ radius: 4, color: 'transparent' });
+                }, 300);
+            }
+        }
+
+        // Periodic maintenance engine window logic
+        function updateMapBoundsCounters() {
+            const now = Date.now();
+            const currentBounds = map.getBounds();
+            let visibleCount = 0;
+
+            // Loop backward through array to prune entries older than 30 minutes seamlessly
+            for (let i = globalStrikes.length - 1; i >= 0; i--) {
+                const strike = globalStrikes[i];
+                const age = now - strike.time;
+
+                if (age > 30 * 60 * 1000) {
+                    // Pull off map rendering layer completely
+                    if (map.hasLayer(strike.marker)) {
+                        map.removeLayer(strike.marker);
+                    }
+                    globalStrikes.splice(i, 1);
+                    continue;
+                }
+
+                // Dynamic age color scaling calculations
+                if (age < 60000) { // Under 1 minute
+                    strike.marker.setStyle({ fillColor: '#00f2fe' });
+                } else if (age < 300000) { // Under 5 minutes
+                    strike.marker.setStyle({ fillColor: '#ffb86c' });
+                } else { // Up to 30 minutes
+                    strike.marker.setStyle({ fillColor: '#8b5cf6' });
+                }
+
+                // Fade alpha opacity out slowly matching true age limits
+                const calculatedOpacity = Math.max(0.15, 1.0 - (age / (30 * 60 * 1000)));
+                strike.marker.setStyle({ fillOpacity: calculatedOpacity });
 
