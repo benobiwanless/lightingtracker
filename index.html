@@ -367,15 +367,15 @@
   <div class="panel-title">Data source <button id="settings-close">✕</button></div>
 
   <div class="mode-toggle">
-    <button id="mode-demo" class="active">Demo feed</button>
-    <button id="mode-live">Live API</button>
+    <button id="mode-demo">Demo feed</button>
+    <button id="mode-live" class="active">Live API</button>
   </div>
 
-  <div id="demo-hint" class="hint">
+  <div id="demo-hint" class="hint" style="display:none;">
     Simulated storm cells drifting through real high-frequency lightning regions (Lake Maracaibo, the Congo Basin, the Gulf Coast). No network calls, works anywhere instantly.
   </div>
 
-  <div id="live-fields" style="display:none; flex-direction:column; gap:12px;">
+  <div id="live-fields" style="display:flex; flex-direction:column; gap:12px;">
     <div class="hint">
       Connects to <b>OpenWeather's Lightning API</b> for a real strike feed near one location (radius capped at 50&nbsp;km by the API itself). Requires your own free API key — get one at openweathermap.org. The key is stored only in your browser and is visible in network requests, so don't reuse a sensitive key.
     </div>
@@ -664,6 +664,16 @@
   var liveConfig = null;
   var livePollHandle = null;
 
+  // Baked-in default so the site is live the instant it loads, no setup required.
+  // Anyone viewing this page's source can see this key — swap it out or move to
+  // your own key if you don't want it public.
+  var DEFAULT_CONFIG = {
+    key: '8c8ea33a88124ab0744dda93235f1230',
+    lat: 28.0395,
+    lon: -81.9498,
+    radius: 50
+  };
+
   function setStatus(text, isLive){
     document.getElementById('status-text').textContent = text;
     document.getElementById('status-dot').className = 'status-dot' + (isLive ? ' live' : '');
@@ -781,16 +791,18 @@
     startLive({ key:key, lat:lat, lon:lon, radius:radius });
   });
 
-  // restore saved config (key only prefilled locally, never sent anywhere but the API)
+  // restore saved config if a visitor previously connected their own key,
+  // otherwise fall back to the baked-in default so the site is live immediately
+  var startConfig = DEFAULT_CONFIG;
   try{
     var saved = JSON.parse(localStorage.getItem('strikewatch_cfg') || 'null');
-    if (saved){
-      document.getElementById('input-key').value = saved.key || '';
-      document.getElementById('input-lat').value = saved.lat || '';
-      document.getElementById('input-lon').value = saved.lon || '';
-      document.getElementById('input-radius').value = saved.radius || 50;
-    }
+    if (saved && saved.key) startConfig = saved;
   }catch(e){}
+
+  document.getElementById('input-key').value = startConfig.key || '';
+  document.getElementById('input-lat').value = startConfig.lat || '';
+  document.getElementById('input-lon').value = startConfig.lon || '';
+  document.getElementById('input-radius').value = startConfig.radius || 50;
 
   /* ============================================================
      TICKER COLLAPSE (mobile)
@@ -803,7 +815,7 @@
     }
   });
 
-  setStatus('DEMO FEED', false);
+  startLive(startConfig);
 })();
 </script>
 </body>
