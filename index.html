@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>STRIKEWATCH — Live Lightning Radar</title>
+<meta name="description" content="A clean, ad-free global lightning strike radar.">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg: #05070c;
+    --panel: rgba(11,16,26,0.86);
+    --panel-border: rgba(120,170,255,0.16);
+    --text-primary: #e9f1ff;
+    --text-dim: #7c8aa3;
+    --text-faint: #4b5670;
+    --accent: #3ee6ff;
+    --accent-dim: rgba(62,230,255,0.35);
+    --age-hot: #ffffff;
+    --age-warm: #ffb020;
+    --age-mid: #a06bff;
+    --age-cool: #33d6ff;
+    --danger: #ff5d6c;
+    --ok: #3ee6a8;
+    --radius: 10px;
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    background:var(--bg);
+    font-family:var(--sans);
+    color:var(--text-primary);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  #map{
+    position:absolute; inset:0; z-index:1;
+    background:var(--bg);
+  }
+  .leaflet-control-attribution{
+    background:rgba(5,7,12,0.75) !important;
+    color:var(--text-faint) !important;
+    font-family:var(--mono);
+    font-size:9px !important;
+    backdrop-filter:blur(4px);
+  }
+  .leaflet-control-attribution a{ color:var(--text-dim) !important; }
+  .leaflet-control-zoom{ display:none; }
+
+  /* ---------- glass panel base ---------- */
+  .hud-panel{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:var(--radius);
+    backdrop-filter:blur(14px) saturate(140%);
+    -webkit-backdrop-filter:blur(14px) saturate(140%);
+    box-shadow:0 8px 30px rgba(0,0,0,0.45);
+  }
+
+  /* ---------- top bar ---------- */
+  #topbar{
+    position:absolute; top:14px; left:14px; right:14px; z-index:500;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 16px;
+    pointer-events:none;
+  }
+  #topbar > *{ pointer-events:auto; }
+  .brand{
+    display:flex; align-items:center; gap:10px;
+    padding:9px 16px 9px 12px;
+  }
+  .brand svg{ width:20px; height:20px; flex:none; }
+  .brand-text{ display:flex; flex-direction:column; line-height:1.1; }
+  .brand-title{
+    font-family:var(--mono); font-weight:700; font-size:14px;
+    letter-spacing:0.14em; color:var(--text-primary);
+  }
+  .brand-sub{
+    font-family:var(--mono); font-size:9px; letter-spacing:0.08em;
+    color:var(--text-faint); margin-top:2px;
+  }
+
+  .stat-cluster{
+    display:flex; align-items:stretch; gap:1px;
+    overflow:hidden; border-radius:var(--radius);
+  }
+  .stat-cluster .hud-panel{ border-radius:0; border-right:none; }
+  .stat-cluster .hud-panel:first-child{ border-radius:var(--radius) 0 0 var(--radius); }
+  .stat-cluster .hud-panel:last-child{ border-radius:0 var(--radius) var(--radius) 0; border-right:1px solid var(--panel-border); }
+  .stat{
+    padding:8px 16px;
+    display:flex; flex-direction:column; align-items:flex-end; justify-content:center;
+    min-width:74px;
+  }
+  .stat-label{
+    font-family:var(--mono); font-size:9px; letter-spacing:0.1em;
+    color:var(--text-faint); text-transform:uppercase;
+  }
+  .stat-value{
+    font-family:var(--mono); font-size:16px; font-weight:600;
+    color:var(--text-primary); font-variant-numeric:tabular-nums;
+  }
+  .status-dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--ok); box-shadow:0 0 8px var(--ok);
+    margin-right:6px;
+    animation:blink 1.6s ease-in-out infinite;
+  }
+  .status-dot.live{ background:var(--danger); box-shadow:0 0 8px var(--danger); }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  .status-row{
+    display:flex; align-items:center;
+    font-family:var(--mono); font-size:10px; letter-spacing:0.08em;
+    color:var(--text-dim); text-transform:uppercase;
+  }
+
+  /* ---------- legend (bottom-left) ---------- */
+  #legend{
+    position:absolute; left:14px; bottom:14px; z-index:500;
+    padding:10px 14px;
+    display:flex; flex-direction:column; gap:6px;
+    width:190px;
+  }
+  #legend .legend-title{
+    font-family:var(--mono); font-size:9px; letter-spacing:0.1em;
+    color:var(--text-faint); text-transform:uppercase;
+  }
+  .legend-bar{
+    height:6px; border-radius:3px; width:100%;
+    background:linear-gradient(90deg, var(--age-hot), var(--age-warm) 30%, var(--age-mid) 65%, var(--age-cool) 100%);
+  }
+  .legend-labels{
+    display:flex; justify-content:space-between;
+    font-family:var(--mono); font-size:9px; color:var(--text-dim);
+  }
+
+  /* ---------- ticker panel (right) ---------- */
+  #ticker-wrap{
+    position:absolute; top:74px; right:14px; bottom:14px; z-index:500;
+    width:280px; display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  #ticker-wrap.collapsed{ display:none; }
+  #ticker-head{
+    padding:11px 14px; display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--panel-border);
+    flex:none;
+  }
+  #ticker-head span{
+    font-family:var(--mono); font-size:10px; letter-spacing:0.12em;
+    color:var(--text-dim); text-transform:uppercase;
+  }
+  #ticker-list{
+    overflow-y:auto; flex:1;
+    padding:4px 0;
+  }
+  #ticker-list::-webkit-scrollbar{ width:6px; }
+  #ticker-list::-webkit-scrollbar-thumb{ background:rgba(120,170,255,0.2); border-radius:3px; }
+  .tick-row{
+    display:flex; align-items:center; gap:10px;
+    padding:8px 14px;
+    cursor:pointer;
+    border-bottom:1px solid rgba(120,170,255,0.06);
+    transition:background 0.15s ease;
+  }
+  .tick-row:hover{ background:rgba(120,170,255,0.07); }
+  .tick-dot{ width:8px; height:8px; border-radius:50%; flex:none; }
+  .tick-meta{ display:flex; flex-direction:column; gap:1px; flex:1; min-width:0; }
+  .tick-coord{
+    font-family:var(--mono); font-size:11px; color:var(--text-primary);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .tick-time{ font-family:var(--mono); font-size:9px; color:var(--text-faint); }
+  .tick-empty{
+    padding:24px 16px; text-align:center;
+    font-family:var(--mono); font-size:10px; color:var(--text-faint);
+    letter-spacing:0.06em;
+  }
+
+  #ticker-toggle{
+    position:absolute; top:74px; right:14px; z-index:501;
+    width:38px; height:38px; display:none;
+    align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  #ticker-toggle svg{ width:16px; height:16px; }
+
+  /* ---------- settings ---------- */
+  #settings-btn{
+    position:absolute; right:14px; bottom:14px; z-index:500;
+    width:42px; height:42px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:transform 0.2s ease;
+  }
+  #settings-btn:hover{ transform:rotate(28deg); }
+  #settings-btn svg{ width:18px; height:18px; color:var(--text-dim); }
+
+  #settings-panel{
+    position:absolute; right:14px; bottom:66px; z-index:600;
+    width:320px; padding:18px;
+    display:none; flex-direction:column; gap:14px;
+  }
+  #settings-panel.open{ display:flex; }
+  .panel-title{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.1em;
+    color:var(--text-primary); text-transform:uppercase;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .panel-title button{
+    background:none; border:none; color:var(--text-faint);
+    font-family:var(--mono); font-size:14px; cursor:pointer; padding:0;
+  }
+  .mode-toggle{
+    display:flex; border:1px solid var(--panel-border); border-radius:8px; overflow:hidden;
+  }
+  .mode-toggle button{
+    flex:1; padding:8px; background:none; border:none; cursor:pointer;
+    font-family:var(--mono); font-size:10px; letter-spacing:0.06em;
+    color:var(--text-dim); text-transform:uppercase;
+    transition:all 0.15s ease;
+  }
+  .mode-toggle button.active{
+    background:var(--accent-dim); color:var(--accent);
+  }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{
+    font-family:var(--mono); font-size:9px; letter-spacing:0.08em;
+    color:var(--text-faint); text-transform:uppercase;
+  }
+  .field input{
+    background:rgba(255,255,255,0.04);
+    border:1px solid var(--panel-border);
+    border-radius:6px; padding:8px 10px;
+    color:var(--text-primary); font-family:var(--mono); font-size:12px;
+    outline:none;
+  }
+  .field input:focus{ border-color:var(--accent-dim); }
+  .field-row{ display:flex; gap:8px; }
+  .field-row .field{ flex:1; }
+  .hint{
+    font-size:11px; line-height:1.5; color:var(--text-dim);
+    font-family:var(--sans);
+  }
+  .hint b{ color:var(--text-primary); font-weight:600; }
+  .btn-primary{
+    background:var(--accent); color:#00161a; border:none; border-radius:6px;
+    padding:10px; font-family:var(--mono); font-size:11px; font-weight:700;
+    letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
+  }
+  .btn-primary:hover{ filter:brightness(1.1); }
+  .btn-locate{
+    background:none; border:1px solid var(--panel-border); border-radius:6px;
+    color:var(--text-dim); font-family:var(--mono); font-size:10px;
+    padding:8px; cursor:pointer;
+  }
+  .btn-locate:hover{ color:var(--accent); border-color:var(--accent-dim); }
+  .settings-status{
+    font-family:var(--mono); font-size:10px; padding:8px 10px;
+    border-radius:6px; background:rgba(255,255,255,0.03);
+    color:var(--text-dim); line-height:1.4;
+  }
+
+  /* ---------- leaflet strike marker ---------- */
+  .strike-marker{ position:relative; width:0; height:0; }
+  .strike-core{
+    position:absolute; left:-3px; top:-3px; width:6px; height:6px;
+    border-radius:50%;
+  }
+  .strike-ring{
+    position:absolute; left:-4px; top:-4px; width:8px; height:8px;
+    border-radius:50%; border:1.5px solid;
+    animation:strikeping 1.1s cubic-bezier(0.2,0.6,0.4,1) forwards;
+  }
+  @keyframes strikeping{
+    0%{ transform:scale(1); opacity:0.95; }
+    100%{ transform:scale(9); opacity:0; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .strike-ring{ animation:none; opacity:0; }
+    .status-dot{ animation:none; }
+  }
+
+  /* ---------- mobile ---------- */
+  @media (max-width: 720px){
+    #topbar{ flex-wrap:wrap; gap:8px; }
+    .brand-sub{ display:none; }
+    .stat-cluster{ order:3; width:100%; }
+    #ticker-wrap{
+      top:auto; bottom:0; left:0; right:0; width:auto; height:40vh;
+      border-radius:14px 14px 0 0; z-index:700;
+      transform:translateY(calc(100% - 46px));
+      transition:transform 0.25s ease;
+    }
+    #ticker-wrap.expanded{ transform:translateY(0); }
+    #ticker-toggle{ display:none !important; }
+    #ticker-head{ cursor:pointer; }
+    #settings-panel{ left:14px; right:14px; width:auto; bottom:66px; }
+    #legend{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- top bar -->
+<div id="topbar">
+  <div class="brand hud-panel">
+    <svg viewBox="0 0 24 24" fill="none">
+      <path d="M13 2 L5 14 L11 14 L10 22 L19 9 L13 9 Z" fill="var(--accent)" stroke="none"/>
+    </svg>
+    <div class="brand-text">
+      <div class="brand-title">STRIKEWATCH</div>
+      <div class="brand-sub">GLOBAL LIGHTNING RADAR</div>
+    </div>
+  </div>
+
+  <div class="stat-cluster">
+    <div class="hud-panel stat">
+      <span class="status-row"><span class="status-dot" id="status-dot"></span><span id="status-text">DEMO FEED</span></span>
+    </div>
+    <div class="hud-panel stat">
+      <div class="stat-label">Last 60m</div>
+      <div class="stat-value" id="stat-count">0</div>
+    </div>
+    <div class="hud-panel stat">
+      <div class="stat-label">Rate/hr</div>
+      <div class="stat-value" id="stat-rate">0</div>
+    </div>
+  </div>
+</div>
+
+<!-- legend -->
+<div id="legend" class="hud-panel">
+  <div class="legend-title">Strike age</div>
+  <div class="legend-bar"></div>
+  <div class="legend-labels"><span>now</span><span>1m</span><span>5m</span><span>15m+</span></div>
+</div>
+
+<!-- ticker -->
+<div id="ticker-wrap" class="hud-panel">
+  <div id="ticker-head">
+    <span>Recent strikes</span>
+    <span id="ticker-count">0</span>
+  </div>
+  <div id="ticker-list">
+    <div class="tick-empty">WATCHING FOR ACTIVITY…</div>
+  </div>
+</div>
+
+<!-- settings -->
+<div id="settings-btn" class="hud-panel" title="Data source settings">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+</div>
+
+<div id="settings-panel" class="hud-panel">
+  <div class="panel-title">Data source <button id="settings-close">✕</button></div>
+
+  <div class="mode-toggle">
+    <button id="mode-demo" class="active">Demo feed</button>
+    <button id="mode-live">Live API</button>
+  </div>
+
+  <div id="demo-hint" class="hint">
+    Simulated storm cells drifting through real high-frequency lightning regions (Lake Maracaibo, the Congo Basin, the Gulf Coast). No network calls, works anywhere instantly.
+  </div>
+
+  <div id="live-fields" style="display:none; flex-direction:column; gap:12px;">
+    <div class="hint">
+      Connects to <b>OpenWeather's Lightning API</b> for a real strike feed near one location (radius capped at 50&nbsp;km by the API itself). Requires your own free API key — get one at openweathermap.org. The key is stored only in your browser and is visible in network requests, so don't reuse a sensitive key.
+    </div>
+    <div class="field">
+      <label>API key</label>
+      <input id="input-key" type="text" placeholder="paste your OpenWeather API key" autocomplete="off">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Latitude</label>
+        <input id="input-lat" type="text" placeholder="28.2366">
+      </div>
+      <div class="field">
+        <label>Longitude</label>
+        <input id="input-lon" type="text" placeholder="-80.9637">
+      </div>
+    </div>
+    <div class="field">
+      <label>Radius (km, max 50)</label>
+      <input id="input-radius" type="text" placeholder="50">
+    </div>
+    <button class="btn-locate" id="btn-locate">Use my current location</button>
+    <button class="btn-primary" id="btn-connect">Connect &amp; watch</button>
+    <div class="settings-status" id="live-status">Not connected — showing demo feed until you connect.</div>
+  </div>
+</div>
+
+<div id="ticker-toggle" class="hud-panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================
+     MAP SETUP
+  ============================================================ */
+  var map = L.map('map', {
+    zoomControl:false,
+    worldCopyJump:true,
+    minZoom:2,
+    maxZoom:11,
+    attributionControl:true
+  }).setView([20, 10], 3);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'&copy; OpenStreetMap &copy; CARTO — strike simulation for demo purposes',
+    subdomains:'abcd',
+    maxZoom:19
+  }).addTo(map);
+
+  var strikeLayer = L.layerGroup().addTo(map);
+
+  /* ============================================================
+     AGE -> COLOR
+  ============================================================ */
+  var AGE_STOPS = [
+    { t: 0,        c: [255,255,255] }, // now: white-hot
+    { t: 90000,    c: [255,176,32]  }, // 90s: amber
+    { t: 300000,   c: [160,107,255] }, // 5min: violet
+    { t: 900000,   c: [51,214,255]  }  // 15min: cool cyan (fading out after)
+  ];
+  var MAX_AGE = 900000; // 15 minutes, then strikes are dropped
+
+  function lerp(a,b,f){ return a + (b-a)*f; }
+  function colorForAge(ageMs){
+    if (ageMs >= AGE_STOPS[AGE_STOPS.length-1].t){
+      var last = AGE_STOPS[AGE_STOPS.length-1].c;
+      return 'rgb(' + last.join(',') + ')';
+    }
+    for (var i=0;i<AGE_STOPS.length-1;i++){
+      var a = AGE_STOPS[i], b = AGE_STOPS[i+1];
+      if (ageMs >= a.t && ageMs <= b.t){
+        var f = (ageMs - a.t) / (b.t - a.t);
+        var r = Math.round(lerp(a.c[0], b.c[0], f));
+        var g = Math.round(lerp(a.c[1], b.c[1], f));
+        var bl = Math.round(lerp(a.c[2], b.c[2], f));
+        return 'rgb(' + r + ',' + g + ',' + bl + ')';
+      }
+    }
+    return 'rgb(255,255,255)';
+  }
+  function opacityForAge(ageMs){
+    if (ageMs > MAX_AGE) return 0;
+    if (ageMs < 600000) return 1;
+    return 1 - (ageMs - 600000) / (MAX_AGE - 600000); // fade over last 5 min of life
+  }
+
+  /* ============================================================
+     STRIKE STORE
+  ============================================================ */
+  var strikes = []; // {id, lat, lon, time, marker}
+  var seenIds = new Set();
+  var idCounter = 0;
+
+  function addStrike(lat, lon, id, ping){
+    id = id || ('s' + (idCounter++));
+    if (seenIds.has(id)) return;
+    seenIds.add(id);
+
+    var icon = L.divIcon({
+      className:'',
+      html:'<div class="strike-marker">' +
+             '<span class="strike-core"></span>' +
+             (ping ? '<span class="strike-ring"></span>' : '') +
+           '</div>',
+      iconSize:[0,0]
+    });
+    var marker = L.marker([lat, lon], { icon: icon, interactive:false }).addTo(strikeLayer);
+
+    var rec = { id:id, lat:lat, lon:lon, time: Date.now(), marker: marker };
+    strikes.push(rec);
+    updateMarkerStyle(rec);
+    prependTicker(rec);
+    return rec;
+  }
+
+  function updateMarkerStyle(rec){
+    var age = Date.now() - rec.time;
+    var color = colorForAge(age);
+    var op = opacityForAge(age);
+    var el = rec.marker.getElement();
+    if (!el) return;
+    var core = el.querySelector('.strike-core');
+    if (core){
+      core.style.background = color;
+      core.style.boxShadow = '0 0 7px 2px ' + color;
+      core.style.opacity = op;
+    }
+    var ring = el.querySelector('.strike-ring');
+    if (ring){ ring.style.borderColor = color; }
+  }
+
+  function tickAges(){
+    var now = Date.now();
+    var keep = [];
+    strikes.forEach(function(rec){
+      var age = now - rec.time;
+      if (age > MAX_AGE){
+        strikeLayer.removeLayer(rec.marker);
+      } else {
+        updateMarkerStyle(rec);
+        keep.push(rec);
+      }
+    });
+    strikes = keep;
+    updateStats();
+  }
+  setInterval(tickAges, 2000);
+
+  /* ============================================================
+     STATS
+  ============================================================ */
+  var statCount = document.getElementById('stat-count');
+  var statRate = document.getElementById('stat-rate');
+
+  function updateStats(){
+    var now = Date.now();
+    var last60 = strikes.filter(function(r){ return now - r.time <= 3600000; }).length;
+    var last5 = strikes.filter(function(r){ return now - r.time <= 300000; }).length;
+    statCount.textContent = last60;
+    statRate.textContent = Math.round(last5 * 12);
+  }
+
+  /* ============================================================
+     TICKER
+  ============================================================ */
+  var tickerList = document.getElementById('ticker-list');
+  var tickerCount = document.getElementById('ticker-count');
+  var tickerEntries = [];
+  var MAX_TICKER = 60;
+
+  function fmtCoord(lat, lon){
+    var ns = lat >= 0 ? 'N' : 'S';
+    var ew = lon >= 0 ? 'E' : 'W';
+    return Math.abs(lat).toFixed(3) + '°' + ns + ', ' + Math.abs(lon).toFixed(3) + '°' + ew;
+  }
+  function fmtAgo(ms){
+    var s = Math.floor(ms/1000);
+    if (s < 60) return s + 's ago';
+    var m = Math.floor(s/60);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m/60);
+    return h + 'h ago';
+  }
+
+  function prependTicker(rec){
+    var empty = tickerList.querySelector('.tick-empty');
+    if (empty) empty.remove();
+
+    var row = document.createElement('div');
+    row.className = 'tick-row';
+    var color = colorForAge(0);
+    row.innerHTML =
+      '<span class="tick-dot" style="background:' + color + ';box-shadow:0 0 6px ' + color + '"></span>' +
+      '<span class="tick-meta">' +
+        '<span class="tick-coord">' + fmtCoord(rec.lat, rec.lon) + '</span>' +
+        '<span class="tick-time" data-t="' + rec.time + '">' + fmtAgo(0) + '</span>' +
+      '</span>';
+    row.addEventListener('click', function(){
+      map.flyTo([rec.lat, rec.lon], Math.max(map.getZoom(), 7), { duration:0.6 });
+    });
+    tickerList.insertBefore(row, tickerList.firstChild);
+    tickerEntries.unshift(row);
+
+    while (tickerEntries.length > MAX_TICKER){
+      var old = tickerEntries.pop();
+      old.remove();
+    }
+    tickerCount.textContent = tickerEntries.length;
+  }
+
+  setInterval(function(){
+    tickerList.querySelectorAll('.tick-time').forEach(function(el){
+      var t = parseInt(el.getAttribute('data-t'), 10);
+      el.textContent = fmtAgo(Date.now() - t);
+    });
+  }, 1000);
+
+  /* ============================================================
+     DEMO STORM SIMULATION
+     Seeded near real-world lightning-dense regions so the demo
+     feels grounded rather than arbitrary noise.
+  ============================================================ */
+  var HOTSPOTS = [
+    { lat: 9.7,   lon: -71.6,  name:'Lake Maracaibo' },
+    { lat: -1.0,  lon: 21.0,   name:'Congo Basin' },
+    { lat: 28.0,  lon: -82.0,  name:'Florida' },
+    { lat: 23.5,  lon: 90.0,   name:'Bay of Bengal' },
+    { lat: -3.0,  lon: -60.0,  name:'Amazon Basin' },
+    { lat: 6.0,   lon: 3.5,    name:'West Africa' }
+  ];
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function gauss(){
+    var u=0,v=0;
+    while(u===0) u = Math.random();
+    while(v===0) v = Math.random();
+    return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+  }
+
+  function newCell(){
+    var h = HOTSPOTS[Math.floor(Math.random()*HOTSPOTS.length)];
+    return {
+      lat: h.lat + rand(-3,3),
+      lon: h.lon + rand(-3,3),
+      vlat: rand(-0.02,0.02),
+      vlon: rand(-0.03,0.03),
+      strength: rand(0.3, 1),
+      life: rand(20000, 90000),
+      born: Date.now()
+    };
+  }
+
+  var cells = [newCell(), newCell(), newCell()];
+  var demoActive = true;
+
+  function demoTick(){
+    if (!demoActive) return;
+    var now = Date.now();
+    cells.forEach(function(cell, i){
+      cell.lat += cell.vlat;
+      cell.lon += cell.vlon;
+      if (now - cell.born > cell.life){
+        cells[i] = newCell();
+        return;
+      }
+      var spawnChance = cell.strength * 0.5;
+      if (Math.random() < spawnChance){
+        var lat = cell.lat + gauss()*0.6;
+        var lon = cell.lon + gauss()*0.6;
+        addStrike(lat, lon, null, true);
+      }
+    });
+    if (Math.random() < 0.004 && cells.length < 5){
+      cells.push(newCell());
+    }
+  }
+  var demoInterval = setInterval(demoTick, 350);
+
+  /* ============================================================
+     LIVE API MODE (OpenWeather Lightning API)
+     Swap fetchLiveStrikes() for any other provider if you prefer —
+     it just needs to resolve to an array of {lat, lon, id, time}.
+  ============================================================ */
+  var liveConfig = null;
+  var livePollHandle = null;
+
+  function setStatus(text, isLive){
+    document.getElementById('status-text').textContent = text;
+    document.getElementById('status-dot').className = 'status-dot' + (isLive ? ' live' : '');
+  }
+
+  function fetchLiveStrikes(cfg){
+    var end = new Date();
+    var start = new Date(end.getTime() - 5*60000);
+    var url = 'https://demo.openweathermap.org/lightning/1.0/data'
+      + '?lat=' + encodeURIComponent(cfg.lat)
+      + '&lon=' + encodeURIComponent(cfg.lon)
+      + '&radius=' + encodeURIComponent(cfg.radius)
+      + '&start_date=' + encodeURIComponent(start.toISOString())
+      + '&end_date=' + encodeURIComponent(end.toISOString())
+      + '&apikey=' + encodeURIComponent(cfg.key);
+
+    return fetch(url).then(function(res){
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function(data){
+      return (data.lightnings || []).map(function(l){
+        return { lat: l.lat, lon: l.lon, id: l.id, time: new Date(l.datetime).getTime() };
+      });
+    });
+  }
+
+  function startLive(cfg){
+    liveConfig = cfg;
+    demoActive = false;
+    cells = [];
+    strikes.forEach(function(r){ strikeLayer.removeLayer(r.marker); });
+    strikes = []; seenIds = new Set();
+    tickerEntries.forEach(function(r){ r.remove(); }); tickerEntries = [];
+    tickerList.innerHTML = '<div class="tick-empty">WATCHING FOR ACTIVITY…</div>';
+
+    map.flyTo([cfg.lat, cfg.lon], 7, { duration:0.8 });
+    setStatus('LIVE: OPENWEATHER', true);
+    document.getElementById('live-status').textContent = 'Connected. Polling every 60s for strikes within ' + cfg.radius + 'km.';
+
+    function poll(){
+      fetchLiveStrikes(cfg).then(function(list){
+        list.forEach(function(s){ addStrike(s.lat, s.lon, s.id, true); });
+        document.getElementById('live-status').textContent =
+          'Connected. Last check ' + new Date().toLocaleTimeString() + ' — ' + list.length + ' strike(s) in window.';
+      }).catch(function(err){
+        document.getElementById('live-status').textContent = 'Error reaching API: ' + err.message + '. Check your key and try again.';
+      });
+    }
+    poll();
+    if (livePollHandle) clearInterval(livePollHandle);
+    livePollHandle = setInterval(poll, 60000);
+  }
+
+  function stopLive(){
+    if (livePollHandle) clearInterval(livePollHandle);
+    livePollHandle = null;
+    liveConfig = null;
+    demoActive = true;
+    setStatus('DEMO FEED', false);
+    document.getElementById('live-status').textContent = 'Not connected — showing demo feed.';
+  }
+
+  /* ============================================================
+     SETTINGS PANEL UI
+  ============================================================ */
+  var settingsBtn = document.getElementById('settings-btn');
+  var settingsPanel = document.getElementById('settings-panel');
+  document.getElementById('settings-close').addEventListener('click', function(){
+    settingsPanel.classList.remove('open');
+  });
+  settingsBtn.addEventListener('click', function(){
+    settingsPanel.classList.toggle('open');
+  });
+
+  var modeDemo = document.getElementById('mode-demo');
+  var modeLive = document.getElementById('mode-live');
+  var demoHint = document.getElementById('demo-hint');
+  var liveFields = document.getElementById('live-fields');
+
+  modeDemo.addEventListener('click', function(){
+    modeDemo.classList.add('active'); modeLive.classList.remove('active');
+    demoHint.style.display = 'block'; liveFields.style.display = 'none';
+    stopLive();
+  });
+  modeLive.addEventListener('click', function(){
+    modeLive.classList.add('active'); modeDemo.classList.remove('active');
+    demoHint.style.display = 'none'; liveFields.style.display = 'flex';
+  });
+
+  document.getElementById('btn-locate').addEventListener('click', function(){
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function(pos){
+      document.getElementById('input-lat').value = pos.coords.latitude.toFixed(4);
+      document.getElementById('input-lon').value = pos.coords.longitude.toFixed(4);
+    });
+  });
+
+  document.getElementById('btn-connect').addEventListener('click', function(){
+    var key = document.getElementById('input-key').value.trim();
+    var lat = parseFloat(document.getElementById('input-lat').value);
+    var lon = parseFloat(document.getElementById('input-lon').value);
+    var radius = Math.min(50, parseFloat(document.getElementById('input-radius').value) || 50);
+
+    if (!key){
+      document.getElementById('live-status').textContent = 'Add an API key first.';
+      return;
+    }
+    if (isNaN(lat) || isNaN(lon)){
+      document.getElementById('live-status').textContent = 'Add a valid latitude and longitude.';
+      return;
+    }
+    try{
+      localStorage.setItem('strikewatch_cfg', JSON.stringify({key:key, lat:lat, lon:lon, radius:radius}));
+    }catch(e){}
+    startLive({ key:key, lat:lat, lon:lon, radius:radius });
+  });
+
+  // restore saved config (key only prefilled locally, never sent anywhere but the API)
+  try{
+    var saved = JSON.parse(localStorage.getItem('strikewatch_cfg') || 'null');
+    if (saved){
+      document.getElementById('input-key').value = saved.key || '';
+      document.getElementById('input-lat').value = saved.lat || '';
+      document.getElementById('input-lon').value = saved.lon || '';
+      document.getElementById('input-radius').value = saved.radius || 50;
+    }
+  }catch(e){}
+
+  /* ============================================================
+     TICKER COLLAPSE (mobile)
+  ============================================================ */
+  var tickerWrap = document.getElementById('ticker-wrap');
+  var tickerHead = document.getElementById('ticker-head');
+  tickerHead.addEventListener('click', function(){
+    if (window.innerWidth <= 720){
+      tickerWrap.classList.toggle('expanded');
+    }
+  });
+
+  setStatus('DEMO FEED', false);
+})();
+</script>
+</body>
+</html>
