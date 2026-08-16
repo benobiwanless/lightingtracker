@@ -1,109 +1,294 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Lightning Tracker - Auburndale FL</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<style>
-*{box-sizing:border-box}html,body,#map{height:100%;margin:0}body{background:#050a0d;color:#fff;font:14px Arial,sans-serif;overflow:hidden}
-#map{background:#071016}.panel{position:absolute;z-index:1000;background:rgba(5,10,13,.92);border:1px solid #334047;border-radius:10px;box-shadow:0 8px 30px #0008}
-#info{left:14px;top:14px;width:265px;padding:16px}.title{color:#ffe500;font-size:21px;font-weight:bold;margin-bottom:14px}
-.location{font-size:20px;font-weight:bold}.coords{color:#aeb8bf;font-size:13px;margin-top:3px}.line{height:1px;background:#ffffff2b;margin:14px 0}
-.label{color:#b9c1c6;font-size:13px;letter-spacing:.4px}.big{font-size:35px;color:#ff3131;margin-top:7px}.closest{font-size:34px;margin-top:7px}.age{color:#ff4545;margin-top:6px}.update{color:#45ee62;font-size:18px;margin-top:7px}
-#legend{right:14px;top:14px;width:160px;padding:14px}.legend-title{font-size:16px;font-weight:bold;margin-bottom:13px}.row{display:flex;align-items:center;gap:10px;margin:10px 0;color:#ddd}.dot{width:17px;height:17px;border-radius:50%;box-shadow:0 0 8px currentColor}
-#bottom{position:absolute;z-index:1000;left:0;right:0;bottom:0;height:66px;background:#050a0df2;border-top:1px solid #ffffff29;display:flex;align-items:center;padding:0 26px;gap:25px}
-button{background:#0b1115;color:#fff;border:1px solid #68737a;border-radius:8px;cursor:pointer}.play{width:56px;height:46px;font-size:20px}.live{display:flex;align-items:center;gap:9px;font-size:18px}.live-dot{width:14px;height:14px;border-radius:50%;background:#44df45;box-shadow:0 0 12px #44df45}
-.gradient-wrap{flex:1;max-width:560px;margin:auto;display:flex;align-items:center;gap:14px}.gradient{height:12px;flex:1;border-radius:10px;background:linear-gradient(90deg,#777,#ddd,#fff,#ffe000,#ff9d00,#ff3a00,#e50000)}.refresh{min-width:160px;text-align:right;color:#cfd5d8}.refresh span{color:#41e55a}
-.leaflet-control-zoom{margin-right:14px!important;margin-bottom:82px!important}.leaflet-control-zoom a{background:#0b1115!important;color:#fff!important;border-color:#455058!important}
-.strike{filter:drop-shadow(0 0 6px currentColor)}
-@media(max-width:700px){#info{width:220px;padding:11px}.title{font-size:17px}.location{font-size:16px}.big,.closest{font-size:25px}#legend{display:none}.gradient-wrap{display:none}#bottom{padding:0 10px}.refresh{font-size:12px}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Lightning Tracker - Auburndale FL</title>
+    <style>
+        :root {
+            --bg-color: #0d0f12;
+            --card-bg: #161a22;
+            --accent-glow: rgba(0, 242, 254, 0.15);
+            --text-main: #f0f4f8;
+            --text-muted: #6272a4;
+            --lightning-color: #00f2fe;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .dashboard {
+            width: 100%;
+            max-width: 600px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+            padding: 24px;
+            box-sizing: border-box;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 16px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 1.4rem;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-badge {
+            font-size: 0.8rem;
+            background: rgba(255, 184, 108, 0.1);
+            color: #ffb86c;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-badge.connected {
+            background: rgba(80, 250, 123, 0.1);
+            color: #50fa7b;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        .coordinates {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 📡 Radar Canvas Map Style */
+        .map-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            background: radial-gradient(circle, #1a2333 0%, #0d131f 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .network-log {
+            margin-top: 16px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
 </head>
 <body>
-<div id="map"></div>
 
-<div id="info" class="panel">
-  <div class="title">⚡ Lightning Tracker</div>
-  <div class="location">📍 Auburndale, FL</div>
-  <div class="coords">28.0653° N, 81.7887° W</div>
-  <div class="line"></div>
-  <div class="label">STRIKES LAST 30 MIN</div>
-  <div id="count" class="big">0</div>
-  <div class="line"></div>
-  <div class="label">CLOSEST STRIKE</div>
-  <div id="closest" class="closest">--</div>
-  <div id="age" class="age">Waiting for strike...</div>
-  <div class="line"></div>
-  <div class="label">LAST UPDATE</div>
-  <div id="updated" class="update">--</div>
-</div>
+    <div class="dashboard">
+        <header>
+            <h1>⚡ Lightning Tracker</h1>
+            <div id="status-badge" class="status-badge">
+                <span class="status-dot"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </header>
 
-<div id="legend" class="panel">
-  <div class="legend-title">STRIKE AGE</div>
-  <div class="row"><i class="dot" style="background:#e50000;color:#e50000"></i>0 - 30 sec</div>
-  <div class="row"><i class="dot" style="background:#ff7900;color:#ff7900"></i>30 - 60 sec</div>
-  <div class="row"><i class="dot" style="background:#ffe000;color:#ffe000"></i>1 - 2 min</div>
-  <div class="row"><i class="dot" style="background:#eee;color:#eee"></i>2 - 5 min</div>
-  <div class="row"><i class="dot" style="background:#999;color:#999"></i>5 - 10 min</div>
-  <div class="row"><i class="dot" style="background:#555;color:#555"></i>10+ min</div>
-</div>
+        <div class="coordinates">📍 Auburndale, FL &bull; 28.0653° N, 81.7887° W</div>
 
-<div id="bottom">
-  <button id="pause" class="play">Ⅱ</button>
-  <div class="live"><span class="live-dot"></span>Live</div>
-  <div class="gradient-wrap"><span>Older</span><div class="gradient"></div><span>Newer</span></div>
-  <div class="refresh">Auto refresh: <span>3 sec</span></div>
-</div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Strikes (30 Mins)</div>
+                <div id="strike-count" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Closest Strike</div>
+                <div id="closest-strike" class="stat-value">--</div>
+            </div>
+        </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-const LOC={lat:28.0653,lon:-81.7887};
-const map=L.map("map").setView([LOC.lat,LOC.lon],10);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
+        <div class="map-container">
+            <canvas id="radarCanvas"></canvas>
+        </div>
 
-[ [5,"#7dff00"], [10,"#ff8a00"], [20,"#ff2020"] ].forEach(([mi,c])=>{
-  L.circle([LOC.lat,LOC.lon],{radius:mi*1609.344,color:c,weight:2,fill:false,opacity:.9,interactive:false}).addTo(map);
-});
-const pin=L.divIcon({className:"",html:'<div style="font-size:35px;filter:drop-shadow(0 0 5px #000)">📍</div>',iconSize:[35,35],iconAnchor:[17,32]});
-L.marker([LOC.lat,LOC.lon],{icon:pin,interactive:false}).addTo(map);
+        <div id="network-log" class="network-log">Initializing data pipeline...</div>
+    </div>
 
-const strikes=[]; let paused=false;
-const storms=[[28.18,-81.58],[27.92,-81.56],[28.00,-81.95],[28.25,-81.72],[27.82,-81.75]];
+    <script>
+        // 📍 Anchor Center Config (Auburndale, FL)
+        const HOME_LAT = 28.0653;
+        const HOME_LON = -81.7887;
+        const MAX_RADIUS_KM = 50; // Perimeter boundary width (50km window)
 
-function dist(a,b,c,d){
- const R=3958.7613, p=Math.PI/180, x=(c-a)*p, y=(d-b)*p;
- const q=Math.sin(x/2)**2+Math.cos(a*p)*Math.cos(c*p)*Math.sin(y/2)**2;
- return R*2*Math.atan2(Math.sqrt(q),Math.sqrt(1-q));
-}
-function strike(){
- if(paused)return;
- const s=storms[Math.floor(Math.random()*storms.length)];
- const lat=s[0]+(Math.random()-.5)*.12,lon=s[1]+(Math.random()-.5)*.16;
- const m=L.circleMarker([lat,lon],{radius:Math.random()<.18?7:4,weight:1,color:"#e50000",fillColor:"#e50000",fillOpacity:1,className:"strike"}).addTo(map);
- const p=L.circle([lat,lon],{radius:150,color:"#fff",weight:1,opacity:.9,fill:false,interactive:false}).addTo(map);
- let r=150,o=.9; const a=setInterval(()=>{r+=260;o-=.08;p.setRadius(r);p.setStyle({opacity:Math.max(0,o)});if(o<=0){clearInterval(a);map.removeLayer(p)}},50);
- const item={lat,lon,m,time:Date.now()}; strikes.push(item);
- setTimeout(()=>m.setStyle({color:"#ff7900",fillColor:"#ff7900"}),30000);
- setTimeout(()=>m.setStyle({color:"#ffe000",fillColor:"#ffe000"}),60000);
- setTimeout(()=>m.setStyle({color:"#eee",fillColor:"#eee"}),120000);
- setTimeout(()=>m.setStyle({color:"#777",fillColor:"#777"}),300000);
- setTimeout(()=>{if(map.hasLayer(m))map.removeLayer(m);const i=strikes.indexOf(item);if(i>=0)strikes.splice(i,1)},600000);
- update();
-}
-function update(){
- document.getElementById("count").textContent=strikes.length;
- if(strikes.length){
-  let best=strikes[0],bd=dist(LOC.lat,LOC.lon,best.lat,best.lon);
-  strikes.forEach(s=>{const d=dist(LOC.lat,LOC.lon,s.lat,s.lon);if(d<bd){best=s;bd=d}});
-  document.getElementById("closest").textContent=bd.toFixed(1)+" miles";
-  document.getElementById("age").textContent=Math.floor((Date.now()-best.time)/1000)+" seconds ago";
- }
- document.getElementById("updated").textContent=new Date().toLocaleTimeString();
-}
-for(let i=0;i<24;i++)setTimeout(strike,i*180);
-setInterval(strike,3000);setInterval(update,1000);
-document.getElementById("pause").onclick=()=>{paused=!paused;document.getElementById("pause").textContent=paused?"▶":"Ⅱ"};
-</script>
-</body>
-</html>
+        // UI Element Hooks
+        const countEl = document.getElementById('strike-count');
+        const closestEl = document.getElementById('closest-strike');
+        const statusBadge = document.getElementById('status-badge');
+        const statusText = document.getElementById('status-text');
+        const logEl = document.getElementById('network-log');
+        const canvas = document.getElementById('radarCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Dynamic State Arrays
+        let strikesArray = [];
+        let socket;
+
+        // Blitzortung rotated proxy load balances
+        const wsServers = [
+            "wss://ws1.blitzortung.org:3000",
+            "wss://ws3.blitzortung.org:3000",
+            "wss://ws5.blitzortung.org:3000",
+            "wss://ws7.blitzortung.org:3000"
+        ];
+
+        // Resize Radar to native high-density values
+        function resizeCanvas() {
+            const size = canvas.parentElement.clientWidth;
+            canvas.width = size * window.devicePixelRatio;
+            canvas.height = size * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Earth Curve Trigonometry Calculation
+        function getDistanceAndAzimuth(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth KM radius
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distance = R * c;
+
+            // Compute structural bearing angle relative to center point
+            const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+            const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+                      Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+            const azimuth = Math.atan2(y, x);
+
+            return { distance, azimuth };
+        }
+
+        // LZW Decoding routine built directly to unpack Blitz network arrays
+        function decodeBlitzData(b) {
+            var a, e = {}, d = b.split(""), c = d, f = c, g = [c], h = 256;
+            let o = h; 
+            for (b = 1; b < d.length; b++) {
+                a = d[b].charCodeAt(0);
+                a = h > a ? d[b] : e[a] ? e[a] : f + c;
+                g.push(a);
+                c = a.charAt(0);
+                e[o] = f + c;
+                o++;
+                f = a;
+            }
+            return g.join("");
+        }
+
+        // Network Socket Thread Manager
+        function openConnection() {
+            const server = wsServers[Math.floor(Math.random() * wsServers.length)];
+            logEl.innerText = `Connecting to routing path: ${server}`;
+            
+            socket = new WebSocket(server);
+
+            socket.onopen = () => {
+                statusBadge.classList.add('connected');
+                statusText.innerText = "Live";
+                logEl.innerText = "Pipeline steady. Listening for Floridian electrical activity...";
+                socket.send(JSON.stringify({ "a": 1 })); // Dynamic protocol verification handshake
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    let raw = event.data;
+                    if (typeof raw === "string" && !raw.startsWith("{")) {
+                        raw = decodeBlitzData(raw);
+                    }
+                    const packet = JSON.parse(raw);
+                    
+                    // Parse normalized strike coordinates across variable JSON mutations
+                    const lat = packet.lat || (Array.isArray(packet) ? packet[1] : null);
+                    const lon = packet.lon || (Array.isArray(packet) ? packet[2] : null);
+
+                    if (!lat || !lon) return;
+
+                    const geo = getDistanceAndAzimuth(HOME_LAT, HOME_LON, lat, lon);
+
+                    if (geo.distance <= MAX_RADIUS_KM) {
+                        registerNewStrike(lat, lon, geo.distance, geo.azimuth);
+                    }
+                } catch(e) {}
+            };
+
+            socket.onclose = () => {
+                statusBadge.classList.remove('connected');
+                statusText.innerText = "Reconnecting";
+                logEl.innerText = "Connection lost. Cycling downstream endpoints...";
+                setTimeout(openConnection, 4000);
+            };
+        }
+
