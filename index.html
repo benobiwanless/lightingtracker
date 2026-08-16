@@ -5,287 +5,214 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Lightning Radar System</title>
     <style>
-        * {
-            box-sizing: border-box;
-        }
-        
+        * { box-sizing: border-box; }
         html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #080a0f;
-            font-family: monospace;
-            overflow: hidden;
-            color: #4af626;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #080a0f; font-family: monospace;
+            overflow: hidden; color: #4af626;
         }
-
-        /* 🗺️ Container holding the background map image and drawing canvas */
-        .radar-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* Fixed structural background map image */
-        #bgMap {
-            position: absolute;
-            width: auto;
-            height: 90%;
-            aspect-ratio: 1;
-            opacity: 0.25; /* Blends the map into the dark theme */
-            pointer-events: none;
-            user-select: none;
-            filter: invert(1) hue-rotate(90deg) brightness(0.6); /* Formats map into tactical green layout */
-            z-index: 1;
-        }
-
         #radarCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-            cursor: grab;
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%; z-index: 1; cursor: grab;
         }
-        
-        #radarCanvas:active {
-            cursor: grabbing;
-        }
-
-        /* 📊 Tactical Command Control Center HUD Overlay */
+        #radarCanvas:active { cursor: grabbing; }
         .control-hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 10;
-            background: rgba(10, 14, 22, 0.9);
-            border: 1px solid #1ba810;
-            border-radius: 8px;
-            padding: 16px;
-            width: 320px;
-            box-shadow: 0 0 20px rgba(27, 168, 16, 0.2);
-            pointer-events: auto;
+            position: absolute; top: 20px; left: 20px; z-index: 10;
+            background: rgba(10, 14, 22, 0.9); border: 1px solid #1ba810;
+            border-radius: 8px; padding: 16px; width: 320px;
+            box-shadow: 0 0 20px rgba(27, 168, 16, 0.2); pointer-events: auto;
         }
-
         .hud-title {
-            font-size: 1.1rem;
-            font-weight: bold;
-            margin-bottom: 8px;
-            border-bottom: 1px dashed #1ba810;
-            padding-bottom: 6px;
-            display: flex;
-            justify-content: space-between;
+            font-size: 1.1rem; font-weight: bold; margin-bottom: 8px;
+            border-bottom: 1px dashed #1ba810; padding-bottom: 6px;
+            display: flex; justify-content: space-between;
         }
-
-        .hud-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 6px 0;
-            font-size: 0.85rem;
-        }
-
-        .value-highlight {
-            color: #ffffff;
-            font-weight: bold;
-        }
-
+        .hud-row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 0.85rem; }
+        .value-highlight { color: #ffffff; font-weight: bold; }
         .instructions {
-            margin-top: 12px;
-            font-size: 0.75rem;
-            color: #888;
-            border-top: 1px dashed #333;
-            padding-top: 8px;
-            text-align: center;
+            margin-top: 12px; font-size: 0.75rem; color: #888;
+            border-top: 1px dashed #333; padding-top: 8px; text-align: center;
         }
     </style>
 </head>
 <body>
 
-    <!-- Tactical HUD Interface Display -->
     <div class="control-hud">
         <div class="hud-title">
             <span>📡 LIGHTNING RADAR</span>
             <span style="color: #ffb86c;" id="status-mode">LIVE</span>
         </div>
-        <div class="hud-row">
-            <span>TRACKING LAT:</span>
-            <span class="value-highlight" id="hud-lat">28.065</span>
-        </div>
-        <div class="hud-row">
-            <span>TRACKING LON:</span>
-            <span class="value-highlight" id="hud-lon">-81.789</span>
-        </div>
-        <div class="hud-row">
-            <span>LOCAL RADAR RADIUS:</span>
-            <span class="value-highlight">250 KM</span>
-        </div>
-        <div class="hud-row">
-            <span>STRIKES DETECTED (30M):</span>
-            <span class="value-highlight" style="color: #00f2fe;" id="strike-counter">0</span>
-        </div>
-        <div class="instructions">
-            🖱️ DRAG GRAPH TO PAN RADAR WINDOW ANYWHERE
-        </div>
+        <div class="hud-row"><span>TRACKING LAT:</span><span class="value-highlight" id="hud-lat">28.065</span></div>
+        <div class="hud-row"><span>TRACKING LON:</span><span class="value-highlight" id="hud-lon">-81.789</span></div>
+        <div class="hud-row"><span>ZOOM SCALE:</span><span class="value-highlight" id="hud-zoom">100%</span></div>
+        <div class="hud-row"><span>STRIKES DETECTED (30M):</span><span class="value-highlight" style="color: #00f2fe;" id="strike-counter">0</span></div>
+        <div class="instructions">🖱️ DRAG TO PAN RADAR • SCROLL WHEEL TO ZOOM</div>
     </div>
 
-    <!-- Active Rendering Layout Layer Group -->
-    <div class="radar-container">
-        <img id="bgMap" src="" alt="Radar Backdrop Context Map" />
-        <canvas id="radarCanvas"></canvas>
-    </div>
+    <canvas id="radarCanvas"></canvas>
 
     <script>
         const canvas = document.getElementById('radarCanvas');
         const ctx = canvas.getContext('2d');
-        const bgMapImg = document.getElementById('bgMap');
 
-        // Dynamic State Tracking Parameters
-        let viewLat = 28.0653; // Start over Auburndale, FL
+        // Tracking Position and Boundaries
+        let viewLat = 28.0653; 
         let viewLon = -81.7887;
-        const radarRangeKm = 250; 
+        let zoom = 15; // Degrees of lat/lon visible on screen
 
         let strikeHistory = [];
+        let geoData = null;
         let isDragging = false;
         let startX, startY;
 
-        // Configuration Hooks
         const latEl = document.getElementById('hud-lat');
         const lonEl = document.getElementById('hud-lon');
+        const zoomEl = document.getElementById('hud-zoom');
         const counterEl = document.getElementById('strike-counter');
 
-        function resizeRadar() {
+        function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            updateMapBackground();
         }
-        window.addEventListener('resize', resizeRadar);
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
-        // Fetches a clean static background map snapshot matching your coordinates exactly
-        function updateMapBackground() {
-            // Using open-source OpenStreetMap static image engine pipeline
-            bgMapImg.src = `https://yandex.ru{viewLon},${viewLat}&spn=4.5,4.5&l=map&size=650,650`;
-        }
+        // 🗺️ Download open-source vector map lines safely without external tracking blocks
+        fetch('https://githubusercontent.com')
+            .then(res => res.json())
+            .then(data => { geoData = data; })
+            .catch(() => {
+                // Fallback to simpler server if primary repo returns a timeout
+                fetch('https://openlayers.org')
+                    .then(res => res.json()).then(data => { geoData = data; });
+            });
 
-        // Calculate direct pixel displacement relative to center geographic points
-        function getDistanceAndAzimuth(lat1, lon1, lat2, lon2) {
-            const R = 6371; 
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            const distance = R * c;
-
-            const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
-            const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
-                      Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
-            const azimuth = Math.atan2(y, x);
-
-            return { distance, azimuth };
-        }
-
-        // Real-time lightning generation engine modeling
-        function mockGlobalStreamingNode() {
-            if (Math.random() > 0.3) {
-                // Spawn realistic cluster storm tracks around current coordinates
-                const randLat = viewLat + (Math.random() - 0.5) * 4.5;
-                const randLon = viewLon + (Math.random() - 0.5) * 4.5;
-                
-                strikeHistory.push({
-                    time: Date.now(),
-                    lat: randLat,
-                    lon: randLon
-                });
-            }
-            setTimeout(mockGlobalStreamingNode, Math.random() * 600 + 100);
-        }
-
-        // Dragging & Panning Event Handlers
-        canvas.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
-        });
-
-        window.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-
-            // Translate dragging motion into geographic decimal movements
-            viewLat += dy * 0.006;
-            viewLon -= dx * 0.006;
-
-            latEl.innerText = viewLat.toFixed(3);
-            lonEl.innerText = viewLon.toFixed(3);
-
-            startX = e.clientX;
-            startY = e.clientY;
-        });
-
-        window.addEventListener('mouseup', () => {
-            if (isDragging) {
-                isDragging = false;
-                updateMapBackground(); // Re-fetch the map image once user finishes dragging
-            }
-        });
-
-        // Continuous Loop Graphics Rendering Thread
-        function animateRadarFrame() {
+        // Convert world lat/lon coordinates directly into local screen pixels
+        function toScreen(lon, lat) {
             const w = canvas.width;
             const h = canvas.height;
             const cX = w / 2;
             const cY = h / 2;
-            const maxRadiusPixels = Math.min(w, h) * 0.45;
+            const scale = Math.min(w, h) / zoom;
+
+            const x = cX + (lon - viewLon) * scale * Math.cos(viewLat * Math.PI / 180);
+            const y = cY - (lat - viewLat) * scale;
+            return { x, y };
+        }
+
+        // Live lightning generator engine modeling clusters
+        function simulateStrikes() {
+            if (Math.random() > 0.3) {
+                strikeHistory.push({
+                    time: Date.now(),
+                    lat: viewLat + (Math.random() - 0.5) * (zoom * 0.8),
+                    lon: viewLon + (Math.random() - 0.5) * (zoom * 0.8)
+                });
+            }
+            setTimeout(simulateStrikes, Math.random() * 400 + 100);
+        }
+
+        // Map Control Event Framework (Dragging & Zooming)
+        canvas.addEventListener('mousedown', (e) => { isDragging = true; startX = e.clientX; startY = e.clientY; });
+        window.addEventListener('mouseup', () => { isDragging = false; });
+        
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const scale = Math.min(canvas.width, canvas.height) / zoom;
+
+            viewLon -= dx / (scale * Math.cos(viewLat * Math.PI / 180));
+            viewLat += dy / scale;
+
+            latEl.innerText = viewLat.toFixed(3);
+            lonEl.innerText = viewLon.toFixed(3);
+            startX = e.clientX; startY = e.clientY;
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.deltaY > 0) zoom = Math.min(80, zoom * 1.1);
+            else zoom = Math.max(2, zoom / 1.1);
+            zoomEl.innerText = `${Math.round(15 / zoom * 100)}%`;
+        });
+
+        // Continuous Loop Graphics Hardware Rendering
+        function drawRadar() {
+            const w = canvas.width; const h = canvas.height;
+            const cX = w / 2; const cY = h / 2;
             const now = Date.now();
 
             strikeHistory = strikeHistory.filter(s => now - s.time < 30 * 60 * 1000);
+            ctx.fillStyle = '#080a0f'; ctx.fillRect(0, 0, w, h);
 
-            ctx.clearRect(0, 0, w, h);
-
-            // Draw Target Rings Outline Matrix
-            ctx.strokeStyle = 'rgba(27, 168, 16, 0.2)';
-            ctx.lineWidth = 1;
-            for (let i = 1; i <= 4; i++) {
+            // 1. Draw Native Vector Map Contours
+            if (geoData) {
+                ctx.strokeStyle = 'rgba(27, 168, 16, 0.3)';
+                ctx.lineWidth = 1.5;
                 ctx.beginPath();
-                ctx.arc(cX, cY, (maxRadiusPixels / 4) * i, 0, Math.PI * 2);
+                
+                geoData.features.forEach(feature => {
+                    const coords = feature.geometry.coordinates;
+                    if (feature.geometry.type === "LineString") {
+                        drawLineString(coords);
+                    } else if (feature.geometry.type === "Polygon") {
+                        coords.forEach(drawLineString);
+                    } else if (feature.geometry.type === "MultiPolygon") {
+                        coords.forEach(poly => poly.forEach(drawLineString));
+                    }
+                });
                 ctx.stroke();
             }
 
-            // Draw Crosshair Lines
+            function drawLineString(coords) {
+                let first = true;
+                coords.forEach(pt => {
+                    const pos = toScreen(pt[0], pt[1]);
+                    if (first) { ctx.moveTo(pos.x, pos.y); first = false; }
+                    else { ctx.lineTo(pos.x, pos.y); }
+                });
+            }
+
+            // 2. Draw Grid Concentric Overlay Target Matrix Rings
+            ctx.strokeStyle = 'rgba(27, 168, 16, 0.1)'; ctx.lineWidth = 1;
+            const maxR = Math.min(w, h) * 0.45;
+            for (let i = 1; i <= 4; i++) {
+                ctx.beginPath(); ctx.arc(cX, cY, (maxR / 4) * i, 0, Math.PI * 2); ctx.stroke();
+            }
             ctx.beginPath();
-            ctx.moveTo(cX - maxRadiusPixels, cY); ctx.lineTo(cX + maxRadiusPixels, cY);
-            ctx.moveTo(cX, cY - maxRadiusPixels); ctx.lineTo(cX, cY + maxRadiusPixels);
+            ctx.moveTo(cX - maxR, cY); ctx.lineTo(cX + maxR, cY);
+            ctx.moveTo(cX, cY - maxR); ctx.lineTo(cX, cY + maxR);
             ctx.stroke();
 
-            let visibleStrikeCount = 0;
-
-            // Render Tracking Positions
+            // 3. Render Active Strike Positions
+            let visibleCount = 0;
             strikeHistory.forEach(strike => {
-                const geo = getDistanceAndAzimuth(viewLat, viewLon, strike.lat, strike.lon);
+                const pos = toScreen(strike.lon, strike.lat);
                 
-                if (geo.distance <= radarRangeKm) {
-                    visibleStrikeCount++;
-                    
-                    const ageMs = now - strike.time;
-                    const radiusPixels = (geo.distance / radarRangeKm) * maxRadiusPixels;
-                    
-                    const plotX = cX + radiusPixels * Math.sin(geo.azimuth);
-                    const plotY = cY - radiusPixels * Math.cos(geo.azimuth);
+                // Only count and draw if inside browser window view borders
+                if (pos.x >= 0 && pos.x <= w && pos.y >= 0 && pos.y <= h) {
+                    visibleCount++;
+                    const age = now - strike.time;
 
-                    if (ageMs < 4000) { // Just Happened: Intense White Burst
-                        ctx.fillStyle = '#ffffff';
-                        ctx.beginPath();
-                        ctx.arc(plotX, plotY, 8, 0, Math.PI * 2);
-                        ctx.fill();
+                    if (age < 3000) { // Initial bright electrical discharge bloom
+                        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2); ctx.fill();
                     }
                     
-                    if (ageMs < 60000) { // Under 1 Minute: Electric Cyan
+                    if (age < 60000) ctx.fillStyle = '#00f2fe';        // < 1 min: Cyan
+                    else if (age < 300000) ctx.fillStyle = '#ffb86c';  // < 5 mins: Amber
+                    else ctx.fillStyle = 'rgba(139, 92, 246, 0.35)';   // < 30 mins: Purple
+
+                    ctx.beginPath(); ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2); ctx.fill();
+                }
+            });
+
+            counterEl.innerText = visibleCount;
+            requestAnimationFrame(drawRadar);
+        }
+
+        simulateStrikes();
+        drawRadar();
+    </script>
+</body>
+</html>
