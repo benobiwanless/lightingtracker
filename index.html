@@ -122,6 +122,18 @@
     color:var(--text-dim); text-transform:uppercase;
   }
 
+  /* ---------- move hint pill ---------- */
+  #move-hint{
+    position:absolute; left:50%; bottom:14px; z-index:500;
+    transform:translateX(-50%);
+    padding:8px 14px;
+    font-family:var(--mono); font-size:10px; letter-spacing:0.05em;
+    color:var(--text-dim); white-space:nowrap;
+    display:none;
+    pointer-events:none;
+  }
+  @media (max-width: 720px){ #move-hint{ display:none !important; } }
+
   /* ---------- legend (bottom-left) ---------- */
   #legend{
     position:absolute; left:14px; bottom:14px; z-index:500;
@@ -336,6 +348,9 @@
     </div>
   </div>
 </div>
+
+<!-- move hint (live mode only) -->
+<div id="move-hint" class="hud-panel">Drag or zoom the map to track lightning elsewhere</div>
 
 <!-- legend -->
 <div id="legend" class="hud-panel">
@@ -700,6 +715,32 @@
     });
   }
 
+  var watchCircle = null;
+  function drawWatchCircle(lat, lon, radiusKm){
+    if (watchCircle){ map.removeLayer(watchCircle); }
+    watchCircle = L.circle([lat, lon], {
+      radius: radiusKm * 1000,
+      color: '#3ee6ff',
+      weight: 1.2,
+      opacity: 0.55,
+      fillColor: '#3ee6ff',
+      fillOpacity: 0.04,
+      dashArray: '4 6',
+      interactive: false
+    }).addTo(map);
+  }
+
+  function pollLive(){
+    if (!liveConfig) return;
+    fetchLiveStrikes(liveConfig).then(function(list){
+      list.forEach(function(s){ addStrike(s.lat, s.lon, s.id, true); });
+      document.getElementById('live-status').textContent =
+        'Connected. Last check ' + new Date().toLocaleTimeString() + ' — ' + list.length + ' strike(s) in window.';
+    }).catch(function(err){
+      document.getElementById('live-status').textContent = 'Error reaching API: ' + err.message + '. Check your key and try again.';
+    });
+  }
+
   function startLive(cfg){
     liveConfig = cfg;
     demoActive = false;
@@ -710,21 +751,14 @@
     tickerList.innerHTML = '<div class="tick-empty">WATCHING FOR ACTIVITY…</div>';
 
     map.flyTo([cfg.lat, cfg.lon], 7, { duration:0.8 });
+    drawWatchCircle(cfg.lat, cfg.lon, cfg.radius);
+    document.getElementById('move-hint').style.display = 'block';
     setStatus('LIVE: OPENWEATHER', true);
     document.getElementById('live-status').textContent = 'Connected. Polling every 60s for strikes within ' + cfg.radius + 'km.';
 
-    function poll(){
-      fetchLiveStrikes(cfg).then(function(list){
-        list.forEach(function(s){ addStrike(s.lat, s.lon, s.id, true); });
-        document.getElementById('live-status').textContent =
-          'Connected. Last check ' + new Date().toLocaleTimeString() + ' — ' + list.length + ' strike(s) in window.';
-      }).catch(function(err){
-        document.getElementById('live-status').textContent = 'Error reaching API: ' + err.message + '. Check your key and try again.';
-      });
-    }
-    poll();
+    pollLive();
     if (livePollHandle) clearInterval(livePollHandle);
-    livePollHandle = setInterval(poll, 60000);
+    livePollHandle = setInterval(pollLive, 60000);
   }
 
   function stopLive(){
@@ -732,9 +766,30 @@
     livePollHandle = null;
     liveConfig = null;
     demoActive = true;
+    if (watchCircle){ map.removeLayer(watchCircle); watchCircle = null; }
+    document.getElementById('move-hint').style.display = 'none';
     setStatus('DEMO FEED', false);
     document.getElementById('live-status').textContent = 'Not connected — showing demo feed.';
   }
+
+  // Follow the map: dragging or zooming re-centers the watch radius on the
+  // new view and immediately re-fetches for that spot (still capped at the
+  // API's 50km radius limit, so the circle shows exactly what's covered).
+  var moveDebounce = null;
+  map.on('moveend', function(){
+    if (demoActive || !liveConfig) return;
+    clearTimeout(moveDebounce);
+    moveDebounce = setTimeout(function(){
+      var c = map.getCenter();
+      liveConfig.lat = c.lat;
+      liveConfig.lon = c.lng;
+      drawWatchCircle(c.lat, c.lng, liveConfig.radius);
+      document.getElementById('input-lat').value = c.lat.toFixed(4);
+      document.getElementById('input-lon').value = c.lng.toFixed(4);
+      document.getElementById('live-status').textContent = 'Moved — checking ' + c.lat.toFixed(2) + ', ' + c.lng.toFixed(2) + '…';
+      pollLive();
+    }, 500);
+  });
 
   /* ============================================================
      SETTINGS PANEL UI
